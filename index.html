@@ -5,14 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>专属结单助手</title>
 
+<link rel="stylesheet" href="vendor/fonts/fonts.css" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-<link rel="stylesheet" href="style.css" />
 <link href="https://cdn.jsdelivr.net/npm/cn-fontsource-slideyouran-regular@1.0.3/font.min.css" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Playball&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
 
 <script>
 (function () {
@@ -63,7 +59,7 @@
 
   <main class="app-main">
 
-     <!-- 首页 -->
+    <!-- 首页 -->
     <section class="page active" id="pageMain">
       <div class="home-top-actions">
         <button type="button" class="home-tool-btn" onclick="openToolbox()" title="工具箱" aria-label="工具箱">
@@ -104,18 +100,19 @@
           <div class="home-greeting-text" id="homeGreetingText"></div>
         </div>
       </div>
+
+      <img class="home-corner-badge" src="assets/HF.png" alt="" />
     </section>
 
+    <!-- 小票 -->
     <section class="page" id="pageReceipt">
       <div class="receipt-layout" id="receiptLayout">
         <div class="receipt-main" id="receiptMain">
 
           <section class="panel">
-            <h2 class="section-title">企划信息</h2>
-            <div style="display:none;">
-              <input id="identity" value="画师" />
-              <input id="artist" value="" />
-              <span id="identityNameLabel"></span>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid var(--line);">
+              <h2 class="section-title" style="flex:1;margin:0;padding:0;border-bottom:none;">企划信息</h2>
+              <button type="button" class="tag-btn-inline" id="receiptTagBtn" onclick="openReceiptTagEditor()">标签</button>
             </div>
 
             <div class="module" style="grid-template-columns: 1fr 1fr;">
@@ -194,7 +191,7 @@
               </label>
             </div>
             <div id="groupsContainer"></div>
-            <button class="add-item-btn" onclick="addGroup()">+ 添加稿件组</button>
+            <button class="add-item-btn" id="addGroupBtn" onclick="addGroup()">+ 添加稿件组</button>
           </section>
 
           <section class="panel" id="orderExtrasPanel">
@@ -246,7 +243,6 @@
               </div>
 
               <div class="receipt" id="receipt">
-
                 <div class="receipt-bg-wrap" id="outBgWrap">
                   <img class="receipt-bg-img" id="outBgImg" alt="" draggable="false" />
                   <div class="receipt-img-handle" data-target="bg"></div>
@@ -525,12 +521,21 @@
       </div>
     </section>
 
+    <!-- 订单列表 -->
     <section class="page" id="pageTodo">
-      <div class="order-tabs">
-        <button type="button" class="order-tab active" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
-        <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
-        <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
-        <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+      <div class="order-page-head">
+        <div class="order-tabs">
+          <button type="button" class="order-tab active" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+          <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+          <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+          <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        </div>
+        <button type="button" class="order-filter-btn" onclick="openOrderFilterModal()" title="筛选订单">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 5 H21 L14 13 V20 L10 18 V13 Z"/>
+          </svg>
+          <span>筛选</span>
+        </button>
       </div>
       <section class="panel">
         <div id="todoListContainer"></div>
@@ -678,6 +683,21 @@
       </section>
     </section>
 
+    <!-- 筛选结果 -->
+    <section class="page" id="pageOrderFilterResult">
+      <div class="page-head">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <h1 style="margin:0;">筛选结果</h1>
+          <span class="ofr-summary" id="ofrSummary"></span>
+        </div>
+        <button class="action-btn ghost td-mini-btn" onclick="backFromOrderFilterResult()">← 返回</button>
+      </div>
+      <section class="panel">
+        <div id="orderFilterResultContainer"></div>
+      </section>
+    </section>
+
+    <!-- 订单详情 -->
     <section class="page" id="pageTodoDetail">
       <div class="page-head todo-detail-head">
         <div class="todo-detail-title-row">
@@ -711,6 +731,7 @@
                   <path d="M5 15 H4 a2 2 0 0 1 -2 -2 V4 a2 2 0 0 1 2 -2 h9 a2 2 0 0 1 2 2 v1"/>
                 </svg>
               </button>
+              <div class="td-tags-inline" id="tdTagsInline"></div>
             </div>
           </div>
           <div>
@@ -731,7 +752,6 @@
 
       <section class="panel">
         <h2 class="section-title">其他</h2>
-
         <label style="margin-top:0;">小票</label>
         <div class="td-mini-btn-row">
           <button class="action-btn td-mini-btn" onclick="showTodoReceipt()">小票</button>
@@ -767,6 +787,7 @@
       </section>
     </section>
 
+    <!-- 单主 -->
     <section class="page" id="pageMaster">
       <div class="master-head-row">
         <h1 class="master-head-title">单主<span class="master-count" id="masterCount">（0 位）</span></h1>
@@ -892,6 +913,7 @@
       </section>
     </section>
 
+    <!-- 票夹 -->
     <section class="page" id="pageTicketFolder">
       <div class="page-head ticket-folder-head">
         <div class="ticket-folder-head-left">
@@ -932,6 +954,7 @@
       </section>
     </section>
 
+    <!-- 价目表预览 -->
     <section class="page" id="pagePriceList">
       <div class="page-head price-list-head">
         <h1>价目表</h1>
@@ -955,313 +978,329 @@
       </section>
     </section>
 
-    <!-- ══════════ 价目表设置页 ══════════ -->
-<section class="page" id="pagePriceListSettings">
-  <div class="pl-settings-layout" id="plSettingsLayout">
+    <!-- 价目表设置页 -->
+    <section class="page" id="pagePriceListSettings">
+      <div class="pl-settings-layout" id="plSettingsLayout">
 
-    <!-- 左：设置内容 -->
-    <div class="pl-settings-main">
+        <!-- 左：设置内容 -->
+        <div class="pl-settings-main">
 
-      <div class="page-head price-list-head">
-        <h1>价目表设置</h1>
-        <div class="price-list-head-actions">
-          <button class="action-btn ghost td-mini-btn" onclick="savePriceListPreset()">存储</button>
-          <button class="action-btn ghost td-mini-btn" onclick="openPriceListPresetPicker()">加载</button>
-          <button class="action-btn ghost td-mini-btn" onclick="resetPriceListSettings()">恢复</button>
-          <button class="action-btn ghost td-mini-btn" onclick="backFromPriceListSettings()">← 返回</button>
-        </div>
-      </div>
-
-      <!-- 移动端：预览折叠条 -->
-      <div class="pl-mobile-preview-toggle" id="plMobilePreviewToggle" onclick="togglePlMobilePreview()">
-        <span class="pl-mobile-preview-label">实时预览</span>
-        <span class="pl-mobile-preview-arrow">▼</span>
-      </div>
-
-      <!-- 移动端：预览展开区 -->
-      <div class="pl-mobile-preview-body" id="plMobilePreviewBody">
-        <div class="pl-settings-preview-pages" id="plMobilePreviewPages"></div>
-      </div>
-
-      <div class="rs-tabs pl-tabs">
-        <button class="rs-tab active" data-tab="content" onclick="switchPlTab('content')">内容</button>
-        <button class="rs-tab" data-tab="style" onclick="switchPlTab('style')">样式</button>
-      </div>
-
-      <!-- ─────────── 内容 Tab ─────────── -->
-      <div class="pl-pane active" id="plPaneContent">
-
-        <section class="panel">
-          <h2 class="section-title">快捷操作</h2>
-          <div class="pl-import-row">
-            <button class="action-btn" onclick="importPriceListFromSettings()">一键导入</button>
-            <button class="action-btn ghost" onclick="openPlProcessModal()">约稿流程</button>
-            <button class="action-btn ghost" onclick="openPlNoticeModal()">约稿须知</button>
+          <div class="page-head price-list-head">
+            <h1>价目表设置</h1>
+            <div class="price-list-head-actions">
+              <button class="action-btn ghost td-mini-btn" onclick="savePriceListPreset()">存储</button>
+              <button class="action-btn ghost td-mini-btn" onclick="openPriceListPresetPicker()">加载</button>
+              <button class="action-btn ghost td-mini-btn" onclick="openPlTemplatePicker()">模板</button>
+              <button class="action-btn ghost td-mini-btn" onclick="backFromPriceListSettings()">← 返回</button>
+            </div>
           </div>
-          <p class="setting-desc" style="margin-top:12px;">
-            「一键导入」会<strong>覆盖</strong>当前价目表内容（外观不受影响）。<br>
-            「约稿流程 / 约稿须知」是<strong>全局共用</strong>的，填写一次后所有价目表都会自动使用。
-          </p>
 
-          <div class="flow-switch-row">
-            <div>
-              <div class="flow-switch-label">流程 / 须知另起一页</div>
-              <div class="flow-switch-sub">
-                开启：流程和须知强制新开一页<br>
-                关闭：接在价目表内容末尾
+          <div class="pl-mobile-preview-toggle" id="plMobilePreviewToggle" onclick="togglePlMobilePreview()">
+            <span class="pl-mobile-preview-label">实时预览</span>
+            <span class="pl-mobile-preview-arrow">▼</span>
+          </div>
+
+          <div class="pl-mobile-preview-body" id="plMobilePreviewBody">
+            <div class="pl-settings-preview-pages" id="plMobilePreviewPages"></div>
+          </div>
+
+          <div class="rs-tabs pl-tabs">
+            <button class="rs-tab active" data-tab="content" onclick="switchPlTab('content')">内容</button>
+            <button class="rs-tab" data-tab="style" onclick="switchPlTab('style')">样式</button>
+          </div>
+
+          <!-- 内容 Tab -->
+          <div class="pl-pane active" id="plPaneContent">
+
+            <section class="panel">
+              <h2 class="section-title">快捷操作</h2>
+              <div class="pl-import-row">
+                <button class="action-btn" onclick="importPriceListFromSettings()">一键导入</button>
+                <button class="action-btn ghost" onclick="openPlProcessModal()">约稿流程</button>
+                <button class="action-btn ghost" onclick="openPlNoticeModal()">约稿须知</button>
               </div>
-            </div>
-            <label class="switch-wrap">
-              <span class="switch">
-                <input type="checkbox" id="plProcessNewPage" onchange="onPlProcessNewPageChange()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
-          </div>
-        </section>
+              <p class="setting-desc" style="margin-top:12px;">
+                「一键导入」会<strong>覆盖</strong>当前价目表内容（外观不受影响）。<br>
+                「约稿流程 / 约稿须知」是<strong>全局共用</strong>的，填写一次后所有价目表都会自动使用。
+              </p>
 
-        <section class="panel">
-          <h2 class="section-title">文案区</h2>
+              <div class="flow-switch-row">
+                <div>
+                  <div class="flow-switch-label">流程 / 须知另起一页</div>
+                  <div class="flow-switch-sub">
+                    开启：流程和须知强制新开一页<br>
+                    关闭：接在价目表内容末尾
+                  </div>
+                </div>
+                <label class="switch-wrap">
+                  <span class="switch">
+                    <input type="checkbox" id="plProcessNewPage" onchange="onPlProcessNewPageChange()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+            </section>
 
-          <!-- 署名 -->
-          <div class="section-head-row" style="margin-top:0;">
-            <div class="flow-switch-label" style="flex:0 0 auto;">署名</div>
-            <input id="plTitleSign" oninput="onPlContentChange()" placeholder="署名内容"
-                   style="flex:1;min-width:0;margin:0;font-size:13px;" />
-            <label class="switch-wrap" title="关闭后不显示署名">
-              <span class="switch">
-                <input type="checkbox" id="plTitleEnabled" onchange="onPlTitleEnabledChange()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
+            <section class="panel">
+              <h2 class="section-title">文案区</h2>
+
+              <div class="section-head-row" style="margin-top:0;">
+                <div class="flow-switch-label" style="flex:0 0 auto;">署名</div>
+                <input id="plTitleSign" oninput="onPlContentChange()" placeholder="署名内容"
+                       style="flex:1;min-width:0;margin:0;font-size:13px;" />
+                <label class="switch-wrap" title="关闭后不显示署名">
+                  <span class="switch">
+                    <input type="checkbox" id="plTitleEnabled" onchange="onPlTitleEnabledChange()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+
+              <div class="section-head-row" style="margin-top:24px;">
+                <div style="flex:1;min-width:0;">
+                  <div class="flow-switch-label">表尾说明</div>
+                  <div class="flow-switch-sub">显示在页面底部固定位置；关闭则留白</div>
+                </div>
+                <label class="switch-wrap" title="关闭后不显示表尾说明">
+                  <span class="switch">
+                    <input type="checkbox" id="plBottomEnabled" onchange="onPlBottomEnabledChange()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+              <div id="plBottomBlock" style="margin-top:12px;">
+                <textarea id="plBottomText" rows="2" oninput="onPlContentChange()"
+                          placeholder="投递方式 / 定金 / 联系方式…"></textarea>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2 class="section-title">价格分类</h2>
+              <div id="plCategoriesContainer"></div>
+              <button class="add-item-btn" onclick="addPriceCategory()">+ 添加分类</button>
+            </section>
+
+            <section class="panel">
+              <div class="section-head-row" style="margin-top:0;">
+                <h2 class="section-title" style="flex:1;margin:0;">附加模块</h2>
+                <label class="switch-wrap" title="横排：内容排成一行（放不下自动换行）">
+                  <span class="switch-label-text">横排</span>
+                  <span class="switch">
+                    <input type="checkbox" id="plHorizontalModules" onchange="onPlHorizontalToggle()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+              <div id="plModulesContainer" style="margin-top:14px;"></div>
+            </section>
+
           </div>
 
-          <!-- 表尾说明 -->
-          <div class="section-head-row" style="margin-top:24px;">
-            <div style="flex:1;min-width:0;">
-              <div class="flow-switch-label">表尾说明</div>
-              <div class="flow-switch-sub">显示在页面底部固定位置；关闭则留白</div>
-            </div>
-            <label class="switch-wrap" title="关闭后不显示表尾说明">
-              <span class="switch">
-                <input type="checkbox" id="plBottomEnabled" onchange="onPlBottomEnabledChange()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
-          </div>
-          <div id="plBottomBlock" style="margin-top:12px;">
-            <textarea id="plBottomText" rows="2" oninput="onPlContentChange()"
-                      placeholder="投递方式 / 定金 / 联系方式…"></textarea>
-          </div>
-        </section>
+          <!-- 样式 Tab -->
+          <div class="pl-pane" id="plPaneStyle">
 
-        <!-- 价格分类 -->
-        <section class="panel">
-          <h2 class="section-title">价格分类</h2>
-          <div id="plCategoriesContainer"></div>
-          <button class="add-item-btn" onclick="addPriceCategory()">+ 添加分类</button>
-        </section>
 
-        <!-- 附加模块 -->
-        <section class="panel">
-          <div class="section-head-row" style="margin-top:0;">
-            <h2 class="section-title" style="flex:1;margin:0;">附加模块</h2>
-            <label class="switch-wrap" title="横排：内容排成一行（放不下自动换行）">
-              <span class="switch-label-text">横排</span>
-              <span class="switch">
-                <input type="checkbox" id="plHorizontalModules" onchange="onPlHorizontalToggle()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
+
+            <section class="panel">
+              <div class="section-head-row" style="margin-top:0;">
+                <h2 class="section-title" style="flex:1;margin:0;">基础样式</h2>
+                <button type="button" class="action-btn ghost td-mini-btn" onclick="openPlPositionEditor()" style="margin-right:8px;">位置</button>
+                <label class="switch-wrap" title="跟随主题">
+                  <span class="switch-label-text">跟随主题</span>
+                  <span class="switch">
+                    <input type="checkbox" id="plFollowTheme" onchange="onPlStyleChange()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+
+              <label>布局</label>
+              <div class="flow-options" id="plLayoutOptions">
+                <button type="button" class="flow-opt-btn active" data-mode="double" onclick="setPlLayout('double')">双栏</button>
+                <button type="button" class="flow-opt-btn" data-mode="single" onclick="setPlLayout('single')">单栏</button>
+              </div>
+
+              <label>分页模式</label>
+              <div class="flow-options" id="plPaginationOptions">
+                <button type="button" class="flow-opt-btn active" data-mode="auto" onclick="setPlPagination('auto')">自动分页</button>
+                <button type="button" class="flow-opt-btn" data-mode="manual" onclick="setPlPagination('manual')">手动分页</button>
+              </div>
+
+              <label>分类标题样式</label>
+              <div class="flow-options" id="plCategoryStyleOptions">
+                <button type="button" class="flow-opt-btn active" data-mode="block" onclick="setPlCategoryStyle('block')">色块</button>
+                <button type="button" class="flow-opt-btn" data-mode="number" onclick="setPlCategoryStyle('number')">编号</button>
+                <button type="button" class="flow-opt-btn" data-mode="pill" onclick="setPlCategoryStyle('pill')">胶囊</button>
+                <button type="button" class="flow-opt-btn" data-mode="bar" onclick="setPlCategoryStyle('bar')">竖线</button>
+              </div>
+
+              <label>附加模块标题样式</label>
+              <div class="flow-options" id="plModuleStyleOptions">
+                <button type="button" class="flow-opt-btn active" data-mode="block" onclick="setPlModuleStyle('block')">色块</button>
+                <button type="button" class="flow-opt-btn" data-mode="number" onclick="setPlModuleStyle('number')">编号</button>
+                <button type="button" class="flow-opt-btn" data-mode="pill" onclick="setPlModuleStyle('pill')">胶囊</button>
+                <button type="button" class="flow-opt-btn" data-mode="bar" onclick="setPlModuleStyle('bar')">竖线</button>
+              </div>
+
+              <label>流程须知标题样式</label>
+              <div class="flow-options" id="plNoticeStyleOptions">
+                <button type="button" class="flow-opt-btn active" data-mode="block" onclick="setPlNoticeStyle('block')">色块</button>
+                <button type="button" class="flow-opt-btn" data-mode="number" onclick="setPlNoticeStyle('number')">编号</button>
+                <button type="button" class="flow-opt-btn" data-mode="pill" onclick="setPlNoticeStyle('pill')">胶囊</button>
+                <button type="button" class="flow-opt-btn" data-mode="bar" onclick="setPlNoticeStyle('bar')">竖线</button>
+              </div>
+
+              <div class="flow-switch-row">
+                <div>
+                  <div class="flow-switch-label">点线连接价格</div>
+                  <div class="flow-switch-sub">条目名与价格之间用点线连接</div>
+                </div>
+                <label class="switch-wrap">
+                  <span class="switch">
+                    <input type="checkbox" id="plShowDotted" onchange="onPlStyleChange()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <section class="panel">
+              <h2 class="section-title">字体</h2>
+
+              <label>字体</label>
+              <select id="plFont" onchange="onPlStyleChange()"></select>
+
+              <div class="flow-switch-row" style="padding-top:8px;padding-bottom:8px;">
+                <div>
+                  <div class="flow-switch-label">全部加粗</div>
+                  <div class="flow-switch-sub">开启后，价目表内所有文字加粗</div>
+                </div>
+                <label class="switch-wrap">
+                  <span class="switch">
+                    <input type="checkbox" id="plBoldAll" onchange="onPlStyleChange()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+
+              <label>字体大小</label>
+              <div class="range-row">
+                <div class="range-with-dot pl-range-with-dot">
+                  <input type="range" id="plFontSize" min="10" max="20" step="0.5" value="13.5" oninput="onPlStyleChange()" />
+                  <button type="button" class="range-default-dot pl-font-size-dot" onclick="resetPlFontSize()" title="点击恢复默认字体大小 13.5px"></button>
+                </div>
+                <span class="range-val" id="plFontSizeVal">13.5px</span>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="section-head-row" style="margin-top:0;">
+                <h2 class="section-title" style="flex:1;margin:0;">颜色</h2>
+                <button type="button" class="color-reset-btn" onclick="resetPlColors()" title="恢复默认颜色">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="flow-switch-row" style="padding-top:0;">
+                <div>
+                  <div class="flow-switch-label">装饰色统一</div>
+                  <div class="flow-switch-sub">开启后，三种标题的装饰元素共用一个颜色</div>
+                </div>
+                <label class="switch-wrap">
+                  <span class="switch">
+                    <input type="checkbox" id="plDecoUnified" onchange="onPlDecoUnifiedToggle()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+
+              <div id="plDecoUnifiedBlock">
+                <label>装饰色</label>
+                <input type="color" id="plDecoColor" oninput="onPlStyleChange()" />
+              </div>
+
+              <div id="plDecoSplitBlock">
+                <label>分类标题装饰色</label>
+                <input type="color" id="plDecoCategory" oninput="onPlStyleChange()" />
+
+                <label>附加模块标题装饰色</label>
+                <input type="color" id="plDecoModule" oninput="onPlStyleChange()" />
+
+                <label>流程须知标题装饰色</label>
+                <input type="color" id="plDecoNotice" oninput="onPlStyleChange()" />
+              </div>
+
+              <div class="flow-switch-row" style="padding-top:14px;">
+                <div>
+                  <div class="flow-switch-label">标题色统一</div>
+                  <div class="flow-switch-sub">开启后，三种标题的文字共用一个颜色</div>
+                </div>
+                <label class="switch-wrap">
+                  <span class="switch">
+                    <input type="checkbox" id="plTitleColorUnified" onchange="onPlTitleColorUnifiedToggle()" />
+                    <span class="switch-slider"></span>
+                  </span>
+                </label>
+              </div>
+
+              <div id="plTitleColorUnifiedBlock">
+                <label>标题文字色</label>
+                <input type="color" id="plColorTitle" oninput="onPlStyleChange()" />
+              </div>
+
+              <div id="plTitleColorSplitBlock">
+                <label>分类标题文字色</label>
+                <input type="color" id="plColorTitleCategory" oninput="onPlStyleChange()" />
+
+                <label>附加模块标题文字色</label>
+                <input type="color" id="plColorTitleModule" oninput="onPlStyleChange()" />
+
+                <label>流程须知标题文字色</label>
+                <input type="color" id="plColorTitleNotice" oninput="onPlStyleChange()" />
+              </div>
+
+              <label>胶囊文字色（标题样式选"胶囊"时生效）</label>
+              <input type="color" id="plPillInk" oninput="onPlStyleChange()" />
+
+              <label>内容色（条目名、价格、正文）</label>
+              <input type="color" id="plColorContent" oninput="onPlStyleChange()" />
+
+              <label>小字色（备注、注脚）</label>
+              <input type="color" id="plColorSmall" oninput="onPlStyleChange()" />
+            </section>
+
+            <section class="panel">
+              <h2 class="section-title">背景图</h2>
+
+              <div class="rs-file-row">
+                <label class="upload-btn" for="plBgImgInput">＋ 上传背景图</label>
+                <input type="file" id="plBgImgInput" class="file-input" accept="image/*" />
+                <button class="rs-btn-sm ghost" onclick="clearPriceListImg('bg')">清除</button>
+              </div>
+
+              <label>背景图透明度</label>
+              <div class="range-row">
+                <input type="range" id="plBgOpacity" min="0" max="1" step="0.05" value="1" oninput="onPlStyleChange()" />
+                <span class="range-val" id="plBgOpacityVal">100%</span>
+              </div>
+            </section>
+
           </div>
-          <div id="plModulesContainer" style="margin-top:14px;"></div>
-        </section>
+        </div>
+
+        <!-- 右：桌面端预览 -->
+        <aside class="pl-settings-preview" id="plSettingsPreview">
+          <div class="pl-settings-preview-head">实时预览</div>
+          <div class="pl-settings-preview-pages" id="plDesktopPreviewPages"></div>
+        </aside>
 
       </div>
+    </section>
 
-      <!-- ─────────── 样式 Tab ─────────── -->
-      <div class="pl-pane" id="plPaneStyle">
-
-        <section class="panel">
-          <h2 class="section-title">模板</h2>
-          <div class="pl-template-grid" id="plTemplateGrid"></div>
-        </section>
-
-        <section class="panel">
-          <div class="section-head-row" style="margin-top:0;">
-            <h2 class="section-title" style="flex:1;margin:0;">基础样式</h2>
-            <label class="switch-wrap" title="跟随主题">
-              <span class="switch-label-text">跟随主题</span>
-              <span class="switch">
-                <input type="checkbox" id="plFollowTheme" onchange="onPlStyleChange()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
-          </div>
-
-          <label>布局</label>
-          <div class="flow-options" id="plLayoutOptions">
-            <button type="button" class="flow-opt-btn active" data-mode="double"
-                    onclick="setPlLayout('double')">双栏</button>
-            <button type="button" class="flow-opt-btn" data-mode="single"
-                    onclick="setPlLayout('single')">单栏</button>
-          </div>
-
-          <label>分页模式</label>
-          <div class="flow-options" id="plPaginationOptions">
-            <button type="button" class="flow-opt-btn active" data-mode="auto"
-                    onclick="setPlPagination('auto')">自动分页</button>
-            <button type="button" class="flow-opt-btn" data-mode="manual"
-                    onclick="setPlPagination('manual')">手动分页</button>
-          </div>
-
-          <label>分类标题样式</label>
-          <div class="flow-options" id="plCategoryStyleOptions">
-            <button type="button" class="flow-opt-btn active" data-mode="block"
-                    onclick="setPlCategoryStyle('block')">色块</button>
-            <button type="button" class="flow-opt-btn" data-mode="number"
-                    onclick="setPlCategoryStyle('number')">编号</button>
-            <button type="button" class="flow-opt-btn" data-mode="pill"
-                    onclick="setPlCategoryStyle('pill')">胶囊</button>
-            <button type="button" class="flow-opt-btn" data-mode="bar"
-                    onclick="setPlCategoryStyle('bar')">竖线</button>
-          </div>
-
-          <label>附加模块标题样式</label>
-          <div class="flow-options" id="plModuleStyleOptions">
-            <button type="button" class="flow-opt-btn active" data-mode="block"
-                    onclick="setPlModuleStyle('block')">色块</button>
-            <button type="button" class="flow-opt-btn" data-mode="number"
-                    onclick="setPlModuleStyle('number')">编号</button>
-            <button type="button" class="flow-opt-btn" data-mode="pill"
-                    onclick="setPlModuleStyle('pill')">胶囊</button>
-            <button type="button" class="flow-opt-btn" data-mode="bar"
-                    onclick="setPlModuleStyle('bar')">竖线</button>
-          </div>
-
-          <label>流程须知标题样式</label>
-          <div class="flow-options" id="plNoticeStyleOptions">
-            <button type="button" class="flow-opt-btn active" data-mode="block"
-                    onclick="setPlNoticeStyle('block')">色块</button>
-            <button type="button" class="flow-opt-btn" data-mode="number"
-                    onclick="setPlNoticeStyle('number')">编号</button>
-            <button type="button" class="flow-opt-btn" data-mode="pill"
-                    onclick="setPlNoticeStyle('pill')">胶囊</button>
-            <button type="button" class="flow-opt-btn" data-mode="bar"
-                    onclick="setPlNoticeStyle('bar')">竖线</button>
-          </div>
-
-          <div class="flow-switch-row">
-            <div>
-              <div class="flow-switch-label">点线连接价格</div>
-              <div class="flow-switch-sub">条目名与价格之间用点线连接</div>
-            </div>
-            <label class="switch-wrap">
-              <span class="switch">
-                <input type="checkbox" id="plShowDotted" onchange="onPlStyleChange()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
-          </div>
-        </section>
-
-        <section class="panel">
-          <h2 class="section-title">字体</h2>
-
-          <label>字体</label>
-          <select id="plFont" onchange="onPlStyleChange()"></select>
-
-          <label>字体大小</label>
-          <div class="range-row">
-            <div class="range-with-dot pl-range-with-dot">
-              <input type="range" id="plFontSize" min="10" max="20" step="0.5" value="13.5"
-                     oninput="onPlStyleChange()" />
-              <button type="button" class="range-default-dot pl-font-size-dot"
-                      onclick="resetPlFontSize()" title="点击恢复默认字体大小 13.5px"></button>
-            </div>
-            <span class="range-val" id="plFontSizeVal">13.5px</span>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="section-head-row" style="margin-top:0;">
-            <h2 class="section-title" style="flex:1;margin:0;">颜色</h2>
-            <button type="button" class="color-reset-btn" onclick="resetPlColors()" title="恢复默认颜色">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="1 4 1 10 7 10"/>
-                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-              </svg>
-            </button>
-          </div>
-
-          <label>标题文字色（三种标题共用）</label>
-          <input type="color" id="plColorTitle" oninput="onPlStyleChange()" />
-
-          <div class="flow-switch-row" style="padding-top:10px;">
-            <div>
-              <div class="flow-switch-label">装饰色统一</div>
-              <div class="flow-switch-sub">开启后，三种标题的装饰元素共用一个颜色</div>
-            </div>
-            <label class="switch-wrap">
-              <span class="switch">
-                <input type="checkbox" id="plDecoUnified" onchange="onPlDecoUnifiedToggle()" />
-                <span class="switch-slider"></span>
-              </span>
-            </label>
-          </div>
-
-          <div id="plDecoUnifiedBlock">
-            <label>装饰色</label>
-            <input type="color" id="plDecoColor" oninput="onPlStyleChange()" />
-          </div>
-
-          <div id="plDecoSplitBlock">
-            <label>分类标题装饰色</label>
-            <input type="color" id="plDecoCategory" oninput="onPlStyleChange()" />
-
-            <label>附加模块标题装饰色</label>
-            <input type="color" id="plDecoModule" oninput="onPlStyleChange()" />
-
-            <label>流程须知标题装饰色</label>
-            <input type="color" id="plDecoNotice" oninput="onPlStyleChange()" />
-          </div>
-
-          <label>内容色（条目名、价格、正文）</label>
-          <input type="color" id="plColorContent" oninput="onPlStyleChange()" />
-
-          <label>小字色（备注、注脚）</label>
-          <input type="color" id="plColorSmall" oninput="onPlStyleChange()" />
-        </section>
-
-        <section class="panel">
-          <h2 class="section-title">背景图</h2>
-
-          <div class="rs-file-row">
-            <label class="upload-btn" for="plBgImgInput">＋ 上传背景图</label>
-            <input type="file" id="plBgImgInput" class="file-input" accept="image/*" />
-            <button class="rs-btn-sm ghost" onclick="clearPriceListImg('bg')">清除</button>
-          </div>
-
-          <label>背景图透明度</label>
-          <div class="range-row">
-            <input type="range" id="plBgOpacity" min="0" max="1" step="0.05" value="1"
-                   oninput="onPlStyleChange()" />
-            <span class="range-val" id="plBgOpacityVal">100%</span>
-          </div>
-        </section>
-
-      </div>
-    </div>
-
-    <!-- 右：桌面端预览 -->
-    <aside class="pl-settings-preview" id="plSettingsPreview">
-      <div class="pl-settings-preview-head">实时预览</div>
-      <div class="pl-settings-preview-pages" id="plDesktopPreviewPages"></div>
-    </aside>
-
-  </div>
-</section>
-
+    <!-- 备忘录 -->
     <section class="page" id="pageMemo">
       <div class="page-head">
         <h1>备忘录</h1>
@@ -1285,6 +1324,7 @@
       </section>
     </section>
 
+    <!-- 设置 -->
     <section class="page" id="pageSettings">
       <div class="page-head"><h1>设置</h1></div>
       <section class="panel">
@@ -1448,20 +1488,17 @@
               <polyline points="15 6 9 12 15 18"/>
             </svg>
           </button>
-
           <div class="sched-ym">
             <select id="schedYear" class="sched-year" onchange="onSchedYearChange()"></select>
             <span class="sched-ym-sep">年</span>
             <select id="schedMonth" class="sched-month" onchange="onSchedMonthChange()"></select>
             <span class="sched-ym-sep">月</span>
           </div>
-
           <button class="sched-arrow" type="button" onclick="schedShiftMonth(1)" aria-label="下一月">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="9 6 15 12 9 18"/>
             </svg>
           </button>
-
           <button class="sched-today" type="button" onclick="schedGoToday()" aria-label="回到今天">今</button>
         </div>
 
@@ -1582,7 +1619,7 @@
 
 <div id="modalRoot"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="vendor/html2canvas.min.js"></script>
 <script src="script.js"></script>
 
 </body>
