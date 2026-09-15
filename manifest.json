@@ -2,7 +2,8 @@
   "name": "专属结单助手",
   "short_name": "结单助手",
   "description": "美工工作台 · 小票 / 订单 / 单主 / 价目表",
-  "start_url": "./",
+  "start_url": "/haoyunbansheng/",
+  "scope": "/haoyunbansheng/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
@@ -10,16 +11,14 @@
   "lang": "zh-CN",
   "icons": [
     {
-      "src": "assets/icon-192.png",
+      "src": "/haoyunbansheng/assets/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     },
     {
-      "src": "assets/icon-512.png",
+      "src": "/haoyunbansheng/assets/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "type": "image/png"
     }
   ]
 }

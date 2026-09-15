@@ -4,6 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>专属结单助手</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json" />
+<meta name="theme-color" content="#111111" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="结单助手" />
+<link rel="apple-touch-icon" href="assets/icon-192.png" />
 
 <link rel="stylesheet" href="vendor/fonts/fonts.css" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
@@ -1621,6 +1628,12 @@
 
 <script src="vendor/html2canvas.min.js"></script>
 <script src="script.js"></script>
-
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/haoyunbansheng/sw.js').catch(() => {});
+  });
+}
+</script>
 </body>
 </html>
