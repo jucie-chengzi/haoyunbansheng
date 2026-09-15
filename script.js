@@ -17366,6 +17366,13 @@ function togglePlMobilePreview() {
   if (toggle) toggle.classList.toggle('is-open', isOpen);
 
   try { localStorage.setItem(PL_MOBILE_PREVIEW_KEY, isOpen ? '1' : '0'); } catch (e) {}
+
+  /* ★ 展开后重算缩放 */
+  if (isOpen) {
+    setTimeout(() => {
+      if (typeof updatePlPreviewScale === 'function') updatePlPreviewScale();
+    }, 50);
+  }
 }
 
 function restorePlMobilePreviewState() {
@@ -17379,6 +17386,10 @@ function restorePlMobilePreviewState() {
   if (open) {
     body.classList.add('is-open');
     if (toggle) toggle.classList.add('is-open');
+    /* ★ 恢复展开状态后重算缩放 */
+    setTimeout(() => {
+      if (typeof updatePlPreviewScale === 'function') updatePlPreviewScale();
+    }, 100);
   } else {
     body.classList.remove('is-open');
     if (toggle) toggle.classList.remove('is-open');
