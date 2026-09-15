@@ -1,0 +1,1589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>专属结单助手</title>
+
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+
+<link rel="stylesheet" href="style.css" />
+<link href="https://cdn.jsdelivr.net/npm/cn-fontsource-slideyouran-regular@1.0.3/font.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playball&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Alex+Brush&display=swap" rel="stylesheet">
+
+<script>
+(function () {
+  try {
+    var t = localStorage.getItem('listReceiptTheme') || 'default';
+    document.documentElement.setAttribute('data-theme', t);
+  } catch (e) {}
+})();
+</script>
+</head>
+<body>
+
+<div class="app">
+
+  <nav class="app-nav">
+    <div class="nav-brand">专属结单助手</div>
+    <div class="nav-items">
+      <button class="nav-item active" data-page="pageMain">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 L12 3 L21 10.5 V21 H3 Z"/><path d="M9 21 V14 H15 V21"/></svg>
+        <span class="nav-label">首页</span>
+      </button>
+      <button class="nav-item" data-page="pageReceipt">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 3 H19 V21 L17 19 L15 21 L13 19 L11 21 L9 19 L7 21 L5 19 Z"/><path d="M9 8 H15"/><path d="M9 12 H15"/><path d="M9 16 H13"/></svg>
+        <span class="nav-label">小票</span>
+      </button>
+      <button class="nav-item" data-page="pageSchedule">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10 H21"/><path d="M8 3 V7"/><path d="M16 3 V7"/><path d="M8 14 H10"/><path d="M14 14 H16"/><path d="M8 18 H10"/></svg>
+        <span class="nav-label">排单</span>
+      </button>
+      <button class="nav-item" data-page="pageTodo">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 10 L10.5 12.5 L16 7"/><path d="M8 16 H16"/></svg>
+        <span class="nav-label">订单</span>
+      </button>
+      <button class="nav-item" data-page="pageStats">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20 V10"/><path d="M10 20 V4"/><path d="M16 20 V14"/><path d="M22 20 V8"/></svg>
+        <span class="nav-label">统计</span>
+      </button>
+      <button class="nav-item" data-page="pageMaster">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21 a8 8 0 0 1 16 0"/></svg>
+        <span class="nav-label">单主</span>
+      </button>
+      <button class="nav-item" data-page="pageSettings">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span class="nav-label">设置</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="app-main">
+
+     <!-- 首页 -->
+    <section class="page active" id="pageMain">
+      <div class="home-top-actions">
+        <button type="button" class="home-tool-btn" onclick="openToolbox()" title="工具箱" aria-label="工具箱">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="4" y1="8"  x2="20" y2="8"/>
+            <line x1="4" y1="12" x2="20" y2="12"/>
+            <line x1="4" y1="16" x2="14" y2="16"/>
+          </svg>
+        </button>
+        <button type="button" class="home-tool-btn" onclick="openTicketFolder()" title="票夹" aria-label="票夹">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="6" width="12" height="14" rx="1.5" transform="rotate(-8 9 13)"/>
+            <rect x="9" y="4" width="12" height="14" rx="1.5" transform="rotate(8 15 11)"/>
+          </svg>
+        </button>
+        <button type="button" class="home-tool-btn" onclick="openPriceList()" title="价目表" aria-label="价目表">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.59 13.41 13.42 20.58 a2 2 0 0 1 -2.83 0 L2 12 V2 h10 l8.59 8.59 a2 2 0 0 1 0 2.82 Z"/>
+            <circle cx="7" cy="7" r="1.5"/>
+          </svg>
+        </button>
+        <button type="button" class="home-tool-btn" onclick="openMemo()" title="备忘录" aria-label="备忘录">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 3 H6 a2 2 0 0 0 -2 2 v14 a2 2 0 0 0 2 2 h12 a2 2 0 0 0 2 -2 V9 Z"/>
+            <polyline points="14 3 14 9 20 9"/>
+            <path d="M9 14 h6"/>
+            <path d="M9 17 h4"/>
+            <path d="M15 12 l1.5 1.5 2 -2"/>
+          </svg>
+        </button>
+      </div>
+
+      <div class="home-wrap">
+        <h1 class="home-title">专属结单助手</h1>
+        <p class="home-sub">每一笔都清清楚楚</p>
+
+        <div class="home-greeting-box" id="homeGreetingBox">
+          <div class="home-greeting-text" id="homeGreetingText"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="page" id="pageReceipt">
+      <div class="receipt-layout" id="receiptLayout">
+        <div class="receipt-main" id="receiptMain">
+
+          <section class="panel">
+            <h2 class="section-title">企划信息</h2>
+            <div style="display:none;">
+              <input id="identity" value="画师" />
+              <input id="artist" value="" />
+              <span id="identityNameLabel"></span>
+            </div>
+
+            <div class="module" style="grid-template-columns: 1fr 1fr;">
+              <div>
+                <label>接单平台</label>
+                <select id="platform"></select>
+
+                <label>单主ID <span class="required-mark">*</span></label>
+                <div class="client-id-wrap">
+                  <input id="client" data-required="1" />
+                  <button type="button" class="client-id-pick-btn"
+                          onclick="openClientPickerForReceipt()"
+                          title="从单主列表选择" aria-label="从单主列表选择">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="8" r="4"/>
+                      <path d="M4 21 a8 8 0 0 1 16 0"/>
+                    </svg>
+                  </button>
+                </div>
+
+                <label>企划名称</label>
+                <input id="project" />
+                <label>属性</label>
+                <input id="attribute" placeholder="填写属性名称" />
+                <label>角色</label>
+                <input id="character" />
+              </div>
+              <div>
+                <label>接单日期 <span class="required-mark">*</span></label>
+                <input id="orderDate" type="date" data-required="1" />
+                <label>排单日期 <span class="required-mark">*</span></label>
+                <input id="scheduleDate" type="date" data-required="1" />
+                <label>工期（天，可留空）</label>
+                <div class="input-unit-wrap suffix">
+                  <input id="workDays" type="number" step="1" min="0" placeholder="如：7" />
+                  <span class="input-unit">天</span>
+                </div>
+                <label>截稿日期（可手动改） <span class="required-mark">*</span></label>
+                <input id="deadline" type="date" data-required="1" />
+                <label>定金模式</label>
+                <select id="depositMode">
+                  <option value="percent">百分比 %</option>
+                  <option value="amount">固定金额 ¥</option>
+                </select>
+                <label>定金（占位单：排单费）</label>
+                <div class="input-unit-wrap suffix" id="depositWrap">
+                  <input id="deposit" type="number" step="0.01" value="20" />
+                  <span class="input-unit" id="depositUnit">%</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="upload-wrap">
+              <label class="upload-label">预览图片（可选，生成小票时展示）</label>
+              <div>
+                <label class="upload-btn" id="uploadBtn" for="previewFile" style="margin:0;">＋ 上传图片</label>
+                <input type="file" id="previewFile" class="file-input" accept="image/*" />
+              </div>
+              <div class="preview-box" id="previewBox">
+                <img id="previewImg" src="" alt="预览" />
+                <button type="button" class="icon-btn" id="clearPreviewBtn" title="移除图片">×</button>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel" id="detailGroupPanel">
+            <div class="section-head-row">
+              <h2 class="section-title" style="flex:1;margin:0 0 14px;">定制细则</h2>
+              <label class="switch-wrap" title="打开后可以不填稿件内容（仅占位）">
+                <span class="switch-label-text">占位</span>
+                <span class="switch">
+                  <input type="checkbox" id="placeholderToggle" onchange="onPlaceholderToggle()" />
+                  <span class="switch-slider"></span>
+                </span>
+              </label>
+            </div>
+            <div id="groupsContainer"></div>
+            <button class="add-item-btn" onclick="addGroup()">+ 添加稿件组</button>
+          </section>
+
+          <section class="panel" id="orderExtrasPanel">
+            <h2 class="section-title">其他</h2>
+            <label style="margin-top:0;">订单级附加费用（基于订单总价）</label>
+            <div id="extrasContainer" class="order-extras"></div>
+            <button class="add-item-btn" onclick="addExtra()">+ 添加总附加费用</button>
+
+            <label>优惠（基于订单总价）</label>
+            <div id="discountsContainer" class="order-extras"></div>
+            <button class="add-item-btn" onclick="addDiscount()">+ 添加总优惠折扣</button>
+
+            <label>赠品（不计入应付）</label>
+            <div id="giftsContainer"></div>
+            <button class="add-item-btn" onclick="addGift()">+ 添加赠品</button>
+          </section>
+
+          <section class="panel">
+            <div class="actions">
+              <button class="action-btn ghost" onclick="resetAll()">重置</button>
+              <button class="action-btn" onclick="generate()">确定生成</button>
+              <button class="action-btn ghost" onclick="saveImage()">保存图片</button>
+            </div>
+          </section>
+
+          <section class="panel receipt-shell hidden" id="receiptPanel">
+            <div class="receipt-wrap">
+              <div class="receipt-toolbar hidden" id="receiptToolbar">
+                <button class="tool-btn" onclick="importToTodo()" title="导入订单">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                    <path d="M8 10 L10.5 12.5 L16 7"/>
+                    <path d="M8 16 H16"/>
+                  </svg>
+                </button>
+                <button class="tool-btn" onclick="openReceiptSettings()" title="修改小票">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                  </svg>
+                </button>
+                <button class="tool-btn" onclick="saveImage()" title="保存图片">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                </button>
+              </div>
+
+              <div class="receipt" id="receipt">
+
+                <div class="receipt-bg-wrap" id="outBgWrap">
+                  <img class="receipt-bg-img" id="outBgImg" alt="" draggable="false" />
+                  <div class="receipt-img-handle" data-target="bg"></div>
+                  <div class="img-resize-handle" data-dir="n"></div>
+                  <div class="img-resize-handle" data-dir="s"></div>
+                  <div class="img-resize-handle" data-dir="w"></div>
+                  <div class="img-resize-handle" data-dir="e"></div>
+                </div>
+
+                <div class="receipt-img-block header-block" id="outHeaderBlock">
+                  <img id="outHeaderImg" alt="" draggable="false" />
+                  <div class="receipt-img-handle" data-target="header"></div>
+                  <div class="img-resize-handle" data-dir="n"></div>
+                  <div class="img-resize-handle" data-dir="s"></div>
+                  <div class="img-resize-handle" data-dir="w"></div>
+                  <div class="img-resize-handle" data-dir="e"></div>
+                </div>
+
+                <div class="header">
+                  <div class="receipt-title-text">· 专属小票 ·</div>
+                  <div class="shop-at" id="outClientAt"></div>
+                </div>
+
+                <div class="receipt-no-row">
+                  <span class="receipt-no" id="outOrderNo"></span>
+                </div>
+
+                <div class="meta">
+                  <div><span>排单日期</span><span id="outScheduleDate"></span></div>
+                  <div><span>截稿日期</span><span id="outDeadline"></span></div>
+                  <div><span id="outIdentityLabel">画师</span><span id="outArtist"></span></div>
+                  <div><span>接单平台</span><span id="outPlatform"></span></div>
+                </div>
+                <hr class="rule double" />
+
+                <div class="info-row bold" id="rowProject"><span class="k">企划名</span><span id="outProject"></span></div>
+                <div class="info-row bold" id="rowAttribute"><span class="k">属性</span><span id="outAttribute"></span></div>
+                <div class="info-row bold" id="rowCharacter"><span class="k">角色</span><span id="outCharacter"></span></div>
+
+                <div class="receipt-photo" id="outPhoto" style="display:none;">
+                  <img id="outPhotoImg" src="" alt="预览图" />
+                </div>
+
+                <div id="outGroups"></div>
+
+                <hr class="rule" />
+                <div class="totals order-totals">
+                  <div class="row"><span>订单总价</span><span id="outTotal"></span></div>
+                  <div class="row" id="outOrderExtrasRow" style="display:none">
+                    <span id="outOrderExtrasLabel">订单总附加费用</span>
+                    <span id="outOrderExtras"></span>
+                  </div>
+                  <div class="row" id="outOrderDiscountRow" style="display:none">
+                    <span id="outOrderDiscountLabel">订单总优惠折扣</span>
+                    <span id="outOrderDiscount"></span>
+                  </div>
+                </div>
+
+                <div class="totals pay-totals">
+                  <div class="row pay"><span>应付金额</span><span class="v" id="outPayable"></span></div>
+                  <div class="row pay-bold" id="outPrepaidRow">
+                    <span id="outPrepaidLabel" class="prepaid-label">预付金额</span>
+                    <span id="outPrepaid"></span>
+                  </div>
+
+                  <div class="row pay-bold" id="outRealPrepaidRow" style="display:none;">
+                    <span id="outRealPrepaidLabel" class="prepaid-label">实收预付</span>
+                    <span id="outRealPrepaid"></span>
+                  </div>
+
+                  <div class="row pay-bold" id="outFinalRow"><span>待结尾款</span><span id="outFinal"></span></div>
+                </div>
+
+                <div id="outGiftsBox" style="display:none;margin-top:10px;">
+                  <div class="info-row" style="color:var(--rc-ink-soft);font-size:12px;letter-spacing:.08em;text-transform:uppercase;">
+                    <span>赠品</span><span>价值</span>
+                  </div>
+                  <div id="outGifts"></div>
+                </div>
+
+                <hr class="rule double" />
+
+                <div class="footer-note">
+                  <div id="outFooterLine1"></div>
+                  <div id="outFooterLine2"></div>
+                </div>
+
+                <div class="receipt-img-block footer-block" id="outFooterBlock">
+                  <img id="outFooterImg" alt="" draggable="false" />
+                  <div class="receipt-img-handle" data-target="footer"></div>
+                  <div class="img-resize-handle" data-dir="n"></div>
+                  <div class="img-resize-handle" data-dir="s"></div>
+                  <div class="img-resize-handle" data-dir="w"></div>
+                  <div class="img-resize-handle" data-dir="e"></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+        </div>
+
+        <aside class="receipt-settings" id="receiptSettings">
+          <div class="rs-head">
+            <h3>小票设置</h3>
+            <div class="rs-head-btns">
+              <button class="rs-btn" onclick="saveReceiptPreset()">存储</button>
+              <button class="rs-btn ghost" onclick="openReceiptPresetPicker()">加载</button>
+              <button class="rs-btn ghost" onclick="resetReceiptSettings()">恢复</button>
+            </div>
+            <button class="rs-close" onclick="closeReceiptSettings()" title="关闭">×</button>
+          </div>
+
+          <div class="rs-tabs">
+            <button class="rs-tab active" data-tab="basic" onclick="switchRsTab('basic')">基础</button>
+            <button class="rs-tab" data-tab="style" onclick="switchRsTab('style')">样式</button>
+          </div>
+
+          <div class="rs-body">
+            <div class="rs-pane active" id="rsPaneBasic">
+              <button type="button" class="rs-label-btn" onclick="setActiveReceiptImage('header')">
+                票头图片 <span class="rs-tip-inline">（可选，点击可编辑）</span>
+              </button>
+              <div class="rs-file-row">
+                <label class="upload-btn" for="rsHeaderImgInput">＋ 上传票头</label>
+                <input type="file" id="rsHeaderImgInput" class="file-input" accept="image/*" />
+                <button class="rs-btn-sm ghost" onclick="fitReceiptImg('header')">适应宽度</button>
+                <button class="rs-btn-sm ghost" onclick="clearReceiptImg('header')">清除</button>
+              </div>
+              <p class="rs-tip-sm">大图会自动压缩后保存 · 点按钮进入编辑态：图片上任意位置可拖，右下角红点等比缩放，边缘虚线可拉伸</p>
+
+              <label>标题（固定，不可修改）</label>
+              <input id="rsTitle" value="专属小票" readonly style="opacity:0.6;" />
+
+              <label>票尾文本 · 第一行</label>
+              <input id="rsFooter1" placeholder="如：十分荣幸为您服务" oninput="applyReceiptSettings()" />
+
+              <label>票尾文本 · 第二行</label>
+              <input id="rsFooter2" placeholder="如：欢迎下次光临～" oninput="applyReceiptSettings()" />
+
+              <button type="button" class="rs-label-btn" onclick="setActiveReceiptImage('footer')">
+                票尾图片 <span class="rs-tip-inline">（可选，点击可编辑）</span>
+              </button>
+              <div class="rs-file-row">
+                <label class="upload-btn" for="rsFooterImgInput">＋ 上传票尾</label>
+                <input type="file" id="rsFooterImgInput" class="file-input" accept="image/*" />
+                <button class="rs-btn-sm ghost" onclick="fitReceiptImg('footer')">适应宽度</button>
+                <button class="rs-btn-sm ghost" onclick="clearReceiptImg('footer')">清除</button>
+              </div>
+              <p class="rs-tip-sm">大图会自动压缩后保存 · 点按钮进入编辑态：图片上任意位置可拖，右下角红点等比缩放，边缘虚线可拉伸</p>
+            </div>
+
+            <div class="rs-pane" id="rsPaneStyle">
+              <label>背景颜色</label>
+              <div class="color-swatches" data-target="rsBgColor">
+                <button type="button" class="color-swatch" data-color="#97cceb" style="background:#97cceb" title="#97cceb" onclick="pickColor('rsBgColor','#97cceb','bgColor')"></button>
+                <button type="button" class="color-swatch" data-color="#a5c757" style="background:#a5c757" title="#a5c757" onclick="pickColor('rsBgColor','#a5c757','bgColor')"></button>
+                <button type="button" class="color-swatch" data-color="#fefbb4" style="background:#fefbb4" title="#fefbb4" onclick="pickColor('rsBgColor','#fefbb4','bgColor')"></button>
+                <button type="button" class="color-swatch" data-color="#fbccdb" style="background:#fbccdb" title="#fbccdb" onclick="pickColor('rsBgColor','#fbccdb','bgColor')"></button>
+                <button type="button" class="color-swatch" data-color="#e7e7ff" style="background:#e7e7ff" title="#e7e7ff" onclick="pickColor('rsBgColor','#e7e7ff','bgColor')"></button>
+                <button type="button" class="color-swatch" data-color="#fffaf6" style="background:#fffaf6" title="#fffaf6" onclick="pickColor('rsBgColor','#fffaf6','bgColor')"></button>
+                <button type="button" class="color-custom-btn" onclick="openCustomColor('rsBgColor')" title="自定义颜色">＋</button>
+                <button type="button" class="color-reset-btn" onclick="resetColor('rsBgColor','#ffffff','bgColor')" title="恢复默认">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                  </svg>
+                </button>
+              </div>
+              <input type="color" id="rsBgColor" value="#ffffff" oninput="onColorChanged('bgColor')" class="color-input-hidden" />
+              <input type="text" class="color-hex" id="rsBgColorHex" value="#ffffff" readonly />
+
+              <label>字体主色（原本黑色）</label>
+              <div class="color-swatches" data-target="rsColorPrimary">
+                <button type="button" class="color-swatch" data-color="#97cceb" style="background:#97cceb" title="#97cceb" onclick="pickColor('rsColorPrimary','#97cceb','colorPrimary')"></button>
+                <button type="button" class="color-swatch" data-color="#a5c757" style="background:#a5c757" title="#a5c757" onclick="pickColor('rsColorPrimary','#a5c757','colorPrimary')"></button>
+                <button type="button" class="color-swatch" data-color="#fefbb4" style="background:#fefbb4" title="#fefbb4" onclick="pickColor('rsColorPrimary','#fefbb4','colorPrimary')"></button>
+                <button type="button" class="color-swatch" data-color="#fbccdb" style="background:#fbccdb" title="#fbccdb" onclick="pickColor('rsColorPrimary','#fbccdb','colorPrimary')"></button>
+                <button type="button" class="color-swatch" data-color="#e7e7ff" style="background:#e7e7ff" title="#e7e7ff" onclick="pickColor('rsColorPrimary','#e7e7ff','colorPrimary')"></button>
+                <button type="button" class="color-swatch" data-color="#fffaf6" style="background:#fffaf6" title="#fffaf6" onclick="pickColor('rsColorPrimary','#fffaf6','colorPrimary')"></button>
+                <button type="button" class="color-custom-btn" onclick="openCustomColor('rsColorPrimary')" title="自定义颜色">＋</button>
+                <button type="button" class="color-reset-btn" onclick="resetColor('rsColorPrimary','#111111','colorPrimary')" title="恢复默认">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                  </svg>
+                </button>
+              </div>
+              <input type="color" id="rsColorPrimary" value="#111111" oninput="onColorChanged('colorPrimary')" class="color-input-hidden" />
+              <input type="text" class="color-hex" id="rsColorPrimaryHex" value="#111111" readonly />
+
+              <label>字体辅色（原本灰色）</label>
+              <div class="color-swatches" data-target="rsColorSecondary">
+                <button type="button" class="color-swatch" data-color="#97cceb" style="background:#97cceb" title="#97cceb" onclick="pickColor('rsColorSecondary','#97cceb','colorSecondary')"></button>
+                <button type="button" class="color-swatch" data-color="#a5c757" style="background:#a5c757" title="#a5c757" onclick="pickColor('rsColorSecondary','#a5c757','colorSecondary')"></button>
+                <button type="button" class="color-swatch" data-color="#fefbb4" style="background:#fefbb4" title="#fefbb4" onclick="pickColor('rsColorSecondary','#fefbb4','colorSecondary')"></button>
+                <button type="button" class="color-swatch" data-color="#fbccdb" style="background:#fbccdb" title="#fbccdb" onclick="pickColor('rsColorSecondary','#fbccdb','colorSecondary')"></button>
+                <button type="button" class="color-swatch" data-color="#e7e7ff" style="background:#e7e7ff" title="#e7e7ff" onclick="pickColor('rsColorSecondary','#e7e7ff','colorSecondary')"></button>
+                <button type="button" class="color-swatch" data-color="#fffaf6" style="background:#fffaf6" title="#fffaf6" onclick="pickColor('rsColorSecondary','#fffaf6','colorSecondary')"></button>
+                <button type="button" class="color-custom-btn" onclick="openCustomColor('rsColorSecondary')" title="自定义颜色">＋</button>
+                <button type="button" class="color-reset-btn" onclick="resetColor('rsColorSecondary','#555555','colorSecondary')" title="恢复默认">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                  </svg>
+                </button>
+              </div>
+              <input type="color" id="rsColorSecondary" value="#555555" oninput="onColorChanged('colorSecondary')" class="color-input-hidden" />
+              <input type="text" class="color-hex" id="rsColorSecondaryHex" value="#555555" readonly />
+
+              <button type="button" class="rs-label-btn" onclick="setActiveReceiptImage('bg')">
+                背景图片 <span class="rs-tip-inline">（可选，点击可编辑）</span>
+              </button>
+              <div class="rs-file-row">
+                <label class="upload-btn" for="rsBgImgInput">＋ 上传背景</label>
+                <input type="file" id="rsBgImgInput" class="file-input" accept="image/*" />
+                <button class="rs-btn-sm ghost" onclick="fitReceiptImg('bg')">适应小票</button>
+                <button class="rs-btn-sm ghost" onclick="clearReceiptImg('bg')">清除</button>
+              </div>
+              <p class="rs-tip-sm">大图会自动压缩后保存 · 点按钮进入编辑态：图片上任意位置可拖，右下角红点等比缩放，边缘虚线可上下左右拉伸</p>
+
+              <label>背景图透明度</label>
+              <div class="range-row">
+                <input type="range" id="rsBgOpacity" min="0" max="1" step="0.05" value="1" oninput="onOpacityChanged()" />
+                <span class="range-val" id="rsBgOpacityVal">100%</span>
+              </div>
+
+              <label>字体（中英文统一）</label>
+              <select id="rsFont" onchange="applyReceiptSettings()">
+                <option value="system">系统默认</option>
+                <option value="'PingFang SC','Microsoft YaHei',sans-serif">苹方 / 微软雅黑</option>
+                <option value="'Source Han Sans SC','Noto Sans SC','Microsoft YaHei',sans-serif">思源黑体</option>
+                <option value="'Source Han Serif SC','Noto Serif SC','Songti SC',serif">思源宋体</option>
+                <option value="'KaiTi','STKaiti','Kaiti SC',serif">楷体</option>
+                <option value="'YouYuan','STYuanti','Yuanti SC',cursive">幼圆</option>
+                <option value="Georgia,'Times New Roman',serif">Georgia / Times</option>
+                <option value="'Times New Roman',Times,serif">Times New Roman</option>
+                <option value="'Courier New',Courier,monospace">Courier New</option>
+                <option value="'Slideyouran','Yanshi Youran Xiaokai',cursive">演示悠然小楷（在线）</option>
+                <option value="'Playball',cursive">Playball（在线 · 英文）</option>
+                <option value="'Alex Brush',cursive">Alex Brush（在线 · 英文花体）</option>
+              </select>
+              <p class="rs-tip-sm">
+                演示悠然小楷、Playball、Alex Brush 通过 CDN 在线加载。
+                其它字体请用下方「导入本地字体」上传。
+              </p>
+
+              <label>字体大小</label>
+              <div class="range-row">
+                <div class="range-with-dot">
+                  <input type="range" id="rsFontSize" min="8" max="24" step="0.5" value="13.5" oninput="onFontSizeChanged()" />
+                  <button type="button" class="range-default-dot" onclick="resetFontSize()" title="点击恢复默认字体大小 13.5px"></button>
+                </div>
+                <span class="range-val" id="rsFontSizeVal">13.5px</span>
+              </div>
+              <p class="rs-tip-sm">
+                调整小票整体文字大小（不含票头 / 票尾）。<br>
+                黑点为默认大小，点击可恢复。
+              </p>
+
+              <label>导入本地字体（TTF / OTF / WOFF / WOFF2）</label>
+              <div class="rs-file-row">
+                <label class="upload-btn" for="rsFontFileInput">＋ 选择字体文件</label>
+                <input type="file" id="rsFontFileInput" class="file-input"
+                       accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2">
+                <button class="rs-btn-sm ghost" onclick="clearLocalFonts()">清空已导入</button>
+              </div>
+              <p class="rs-tip-sm" id="rsFontUploadStatus">
+                导入的字体仅在当前浏览器会话中有效，刷新后需重新导入。
+              </p>
+
+              <div class="custom-font-list" id="customFontList"></div>
+            </div>
+          </div>
+        </aside>
+
+      </div>
+    </section>
+
+    <section class="page" id="pageTodo">
+      <div class="order-tabs">
+        <button type="button" class="order-tab active" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+        <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+        <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+        <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+      </div>
+      <section class="panel">
+        <div id="todoListContainer"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageCompleted">
+      <div class="order-tabs">
+        <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+        <button type="button" class="order-tab active" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+        <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+        <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+      </div>
+      <section class="panel order-filter-panel">
+        <div class="order-filter-bar">
+          <div class="order-range-tabs">
+            <button type="button" class="order-range-btn active" data-range="month" onclick="switchOrderRange('completed','month')">月</button>
+            <button type="button" class="order-range-btn" data-range="year" onclick="switchOrderRange('completed','year')">年</button>
+            <button type="button" class="order-range-btn" data-range="custom" onclick="switchOrderRange('completed','custom')">自定义</button>
+          </div>
+          <div class="order-ym-row" id="completedYmRow">
+            <select id="completedYear" class="order-ym-select" onchange="onOrderYearChange('completed')"></select>
+            <span class="order-ym-sep">年</span>
+            <select id="completedMonth" class="order-ym-select" onchange="onOrderMonthChange('completed')"></select>
+            <span class="order-ym-sep" id="completedMonthLabel">月</span>
+          </div>
+          <div class="order-custom-row" id="completedCustomRow" style="display:none;">
+            <input type="date" id="completedStartDate" class="order-date-input" />
+            <span class="order-range-sep">至</span>
+            <input type="date" id="completedEndDate" class="order-date-input" />
+            <button type="button" class="action-btn ghost order-apply-btn" onclick="applyOrderCustomRange('completed')">确定</button>
+          </div>
+          <div class="order-sort-row">
+            <span class="order-sort-label">排序</span>
+            <button type="button" class="order-sort-icon-btn is-desc" id="completedSortBtn" onclick="toggleOrderSort('completed')" title="切换排序">
+              <svg class="sort-arrow sort-arrow-asc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+              <svg class="sort-arrow sort-arrow-desc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <polyline points="19 12 12 19 5 12"/>
+              </svg>
+            </button>
+          </div>
+          <p class="order-range-hint" id="completedRangeHint"></p>
+        </div>
+      </section>
+      <section class="panel">
+        <div id="completedListContainer"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageCancelled">
+      <div class="order-tabs">
+        <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+        <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+        <button type="button" class="order-tab active" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+        <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+      </div>
+      <section class="panel order-filter-panel">
+        <div class="order-filter-bar">
+          <div class="order-range-tabs">
+            <button type="button" class="order-range-btn active" data-range="month" onclick="switchOrderRange('cancelled','month')">月</button>
+            <button type="button" class="order-range-btn" data-range="year" onclick="switchOrderRange('cancelled','year')">年</button>
+            <button type="button" class="order-range-btn" data-range="custom" onclick="switchOrderRange('cancelled','custom')">自定义</button>
+          </div>
+          <div class="order-ym-row" id="cancelledYmRow">
+            <select id="cancelledYear" class="order-ym-select" onchange="onOrderYearChange('cancelled')"></select>
+            <span class="order-ym-sep">年</span>
+            <select id="cancelledMonth" class="order-ym-select" onchange="onOrderMonthChange('cancelled')"></select>
+            <span class="order-ym-sep" id="cancelledMonthLabel">月</span>
+          </div>
+          <div class="order-custom-row" id="cancelledCustomRow" style="display:none;">
+            <input type="date" id="cancelledStartDate" class="order-date-input" />
+            <span class="order-range-sep">至</span>
+            <input type="date" id="cancelledEndDate" class="order-date-input" />
+            <button type="button" class="action-btn ghost order-apply-btn" onclick="applyOrderCustomRange('cancelled')">确定</button>
+          </div>
+          <div class="order-sort-row">
+            <span class="order-sort-label">排序</span>
+            <button type="button" class="order-sort-icon-btn is-desc" id="cancelledSortBtn" onclick="toggleOrderSort('cancelled')" title="切换排序">
+              <svg class="sort-arrow sort-arrow-asc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+              <svg class="sort-arrow sort-arrow-desc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <polyline points="19 12 12 19 5 12"/>
+              </svg>
+            </button>
+          </div>
+          <p class="order-range-hint" id="cancelledRangeHint"></p>
+        </div>
+      </section>
+      <section class="panel">
+        <div id="cancelledListContainer"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageDiscarded">
+      <div class="order-tabs">
+        <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+        <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+        <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+        <button type="button" class="order-tab active" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+      </div>
+      <section class="panel order-filter-panel">
+        <div class="order-filter-bar">
+          <div class="order-range-tabs">
+            <button type="button" class="order-range-btn active" data-range="month" onclick="switchOrderRange('discarded','month')">月</button>
+            <button type="button" class="order-range-btn" data-range="year" onclick="switchOrderRange('discarded','year')">年</button>
+            <button type="button" class="order-range-btn" data-range="custom" onclick="switchOrderRange('discarded','custom')">自定义</button>
+          </div>
+          <div class="order-ym-row" id="discardedYmRow">
+            <select id="discardedYear" class="order-ym-select" onchange="onOrderYearChange('discarded')"></select>
+            <span class="order-ym-sep">年</span>
+            <select id="discardedMonth" class="order-ym-select" onchange="onOrderMonthChange('discarded')"></select>
+            <span class="order-ym-sep" id="discardedMonthLabel">月</span>
+          </div>
+          <div class="order-custom-row" id="discardedCustomRow" style="display:none;">
+            <input type="date" id="discardedStartDate" class="order-date-input" />
+            <span class="order-range-sep">至</span>
+            <input type="date" id="discardedEndDate" class="order-date-input" />
+            <button type="button" class="action-btn ghost order-apply-btn" onclick="applyOrderCustomRange('discarded')">确定</button>
+          </div>
+          <div class="order-sort-row">
+            <span class="order-sort-label">排序</span>
+            <button type="button" class="order-sort-icon-btn is-desc" id="discardedSortBtn" onclick="toggleOrderSort('discarded')" title="切换排序">
+              <svg class="sort-arrow sort-arrow-asc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+              <svg class="sort-arrow sort-arrow-desc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"/>
+                <polyline points="19 12 12 19 5 12"/>
+              </svg>
+            </button>
+          </div>
+          <p class="order-range-hint" id="discardedRangeHint"></p>
+        </div>
+      </section>
+      <section class="panel">
+        <div id="discardedListContainer"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageTodoDetail">
+      <div class="page-head todo-detail-head">
+        <div class="todo-detail-title-row">
+          <h1 id="tdTitle">订单详情</h1>
+          <button class="action-btn ghost td-mini-btn" id="tdEditBtn" onclick="toggleTodoEdit()">编辑</button>
+          <button class="action-btn td-mini-btn" id="tdSaveBtn" onclick="saveTodoDetail()" style="display:none;">保存</button>
+        </div>
+        <button class="action-btn ghost td-mini-btn" onclick="backToTodoList()">← 返回</button>
+      </div>
+
+      <section class="panel">
+        <h2 class="section-title">基本信息</h2>
+        <div class="module" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>单主ID</label>
+            <input id="tdClientId" class="td-field" readonly />
+
+            <label>联系平台</label>
+            <input id="tdPlatform" class="td-field" readonly />
+
+            <label>联系方式</label>
+            <div class="td-contact-row">
+              <select id="tdContactType" class="td-field" disabled style="flex:0 0 80px;">
+                <option value="QQ">QQ</option>
+                <option value="VX">VX</option>
+              </select>
+              <input id="tdContact" class="td-field" readonly />
+              <button type="button" class="td-copy-btn" onclick="copyTodoContact()" title="复制账号">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15 H4 a2 2 0 0 1 -2 -2 V4 a2 2 0 0 1 2 -2 h9 a2 2 0 0 1 2 2 v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label id="tdDeadlineLabel">截稿日期</label>
+            <input id="tdDeadline" type="date" class="td-field" readonly />
+
+            <label id="tdDaysLeftLabel">距离截稿日</label>
+            <input id="tdDaysLeft" class="td-field" readonly />
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">项目细则</h2>
+        <div id="tdItems"></div>
+        <button class="add-item-btn" id="tdAddItemBtn" onclick="addTodoItem()" style="display:none;">+ 添加事项</button>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">其他</h2>
+
+        <label style="margin-top:0;">小票</label>
+        <div class="td-mini-btn-row">
+          <button class="action-btn td-mini-btn" onclick="showTodoReceipt()">小票</button>
+          <button class="action-btn ghost td-mini-btn" id="tdChangeReceiptBtn" onclick="changeTodoReceipt()">更改</button>
+        </div>
+
+        <label>备注</label>
+        <textarea id="tdNote" class="td-field" rows="4" readonly></textarea>
+
+        <label>素材</label>
+        <div class="td-folder-row">
+          <button type="button" class="td-folder-btn" onclick="triggerTodoUpload('material')" title="素材文件夹">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 19 a2 2 0 0 1 -2 2 H4 a2 2 0 0 1 -2 -2 V5 a2 2 0 0 1 2 -2 h5 l2 3 h9 a2 2 0 0 1 2 2 z"/>
+            </svg>
+          </button>
+          <input type="file" id="tdMaterialInput" class="file-input" accept="image/*" multiple />
+        </div>
+        <div id="tdMaterialsList" class="td-thumbs"></div>
+
+        <label>要求</label>
+        <div class="td-folder-row">
+          <button type="button" class="td-folder-btn" onclick="triggerTodoUpload('requirement')" title="要求图片">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <path d="M21 15 L16 10 L5 21"/>
+            </svg>
+          </button>
+          <input type="file" id="tdRequirementInput" class="file-input" accept="image/*" multiple />
+        </div>
+        <div id="tdRequirementsList" class="td-thumbs"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageMaster">
+      <div class="master-head-row">
+        <h1 class="master-head-title">单主<span class="master-count" id="masterCount">（0 位）</span></h1>
+        <div class="master-head-btns">
+          <button type="button" class="master-head-btn" onclick="openMasterAddModal()">添加</button>
+          <button type="button" class="master-head-btn" onclick="openMasterFilterModal()">筛选</button>
+          <button type="button" class="master-head-btn" id="masterManageBtn" onclick="toggleMasterManageMode()">管理</button>
+        </div>
+      </div>
+
+      <div class="master-manage-bar" id="masterManageBar" style="display:none;">
+        <div class="master-manage-bar-left">
+          <span id="masterSelectedCount">已选择 0 位</span>
+        </div>
+        <div class="master-manage-bar-right">
+          <button type="button" class="master-manage-bar-btn ghost" onclick="toggleAllMasterSelect()" id="masterSelectAllBtn">全选</button>
+          <button type="button" class="master-manage-bar-btn danger" onclick="confirmMasterBatchDelete()" id="masterBatchDeleteBtn" disabled>删除</button>
+          <button type="button" class="master-manage-bar-btn ghost" onclick="exitMasterManageMode()">完成</button>
+        </div>
+      </div>
+
+      <section class="panel master-filter-panel">
+        <input id="masterSearch" class="master-search" placeholder="搜索单主 ID / 联系方式 / 备注 / 标签" oninput="renderMasterList()" />
+        <div class="master-sort-row">
+          <span class="master-sort-label">排序</span>
+          <button type="button" class="master-sort-btn active" data-sort="recent" onclick="setMasterSort('recent')">最近</button>
+          <button type="button" class="master-sort-btn" data-sort="amount" onclick="setMasterSort('amount')">消费</button>
+          <button type="button" class="master-sort-btn" data-sort="orders" onclick="setMasterSort('orders')">订单</button>
+          <button type="button" class="master-sort-btn" data-sort="id" onclick="setMasterSort('id')">ID</button>
+        </div>
+        <p class="master-hint" id="masterListHint"></p>
+      </section>
+
+      <section class="panel">
+        <div id="masterListContainer"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageMasterDetail">
+      <div class="page-head todo-detail-head">
+        <div class="todo-detail-title-row">
+          <h1 id="mdTitle">单主详情</h1>
+          <button class="action-btn ghost td-mini-btn" id="mdEditBtn" onclick="toggleMasterEdit()">编辑</button>
+          <button class="action-btn td-mini-btn" id="mdSaveBtn" onclick="saveMasterDetail()" style="display:none;">保存</button>
+        </div>
+        <button class="action-btn ghost td-mini-btn" onclick="backToMasterList()">← 返回</button>
+      </div>
+
+      <section class="panel">
+        <h2 class="section-title">基本信息</h2>
+        <div class="module" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>单主 ID</label>
+            <input id="mdClientId" class="td-field" readonly />
+
+            <label>常用平台</label>
+            <select id="mdPlatform" class="td-field" disabled></select>
+
+            <label>联系方式</label>
+            <div class="td-contact-row">
+              <select id="mdContactType" class="td-field" disabled style="flex:0 0 80px;">
+                <option value="QQ">QQ</option>
+                <option value="VX">VX</option>
+              </select>
+              <input id="mdContact" class="td-field" readonly />
+              <button type="button" class="td-copy-btn" onclick="copyMasterContact()" title="复制账号">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"/>
+                  <path d="M5 15 H4 a2 2 0 0 1 -2 -2 V4 a2 2 0 0 1 2 -2 h9 a2 2 0 0 1 2 2 v1"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label>首次接单</label>
+            <input id="mdFirstOrder" class="td-field" readonly />
+
+            <label>最近接单</label>
+            <input id="mdLastOrder" class="td-field" readonly />
+
+            <label>订单总数</label>
+            <input id="mdOrderCount" class="td-field" readonly />
+          </div>
+        </div>
+
+        <label>备注</label>
+        <textarea id="mdNote" class="td-field" rows="3" readonly></textarea>
+
+        <label>标签（逗号分隔，如：老客户, 企划方）</label>
+        <input id="mdTags" class="td-field" readonly />
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">财务汇总</h2>
+        <div class="master-stats-grid">
+          <div class="master-stat">
+            <div class="master-stat-title">累计消费</div>
+            <div class="master-stat-value" id="mdIncome">¥0.00</div>
+          </div>
+          <div class="master-stat">
+            <div class="master-stat-title">待结</div>
+            <div class="master-stat-value" id="mdPending">¥0.00</div>
+          </div>
+          <div class="master-stat">
+            <div class="master-stat-title">已结单</div>
+            <div class="master-stat-value" id="mdCompletedCount">0 份</div>
+          </div>
+          <div class="master-stat">
+            <div class="master-stat-title">撤 / 废</div>
+            <div class="master-stat-value" id="mdCancelledDiscarded">0 / 0</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">历史订单</h2>
+        <div id="mdOrdersList"></div>
+      </section>
+
+      <section class="panel">
+        <h2 class="section-title">小票票夹</h2>
+        <div id="mdReceiptFolder" class="master-receipt-folder"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageTicketFolder">
+      <div class="page-head ticket-folder-head">
+        <div class="ticket-folder-head-left">
+          <h1>票夹</h1>
+          <span class="ticket-folder-count" id="ticketFolderCount"></span>
+        </div>
+        <div class="ticket-folder-head-right">
+          <button type="button" class="action-btn ghost td-mini-btn" id="ticketFolderSortBtn" onclick="toggleTicketFolderSort()" title="切换排序">最新优先</button>
+          <button type="button" class="action-btn ghost td-mini-btn" onclick="backFromTicketFolder()">← 返回</button>
+        </div>
+      </div>
+
+      <section class="panel ticket-folder-panel">
+        <div class="ticket-folder-filter-bar">
+          <input id="ticketFolderSearch" class="ticket-folder-search"
+                 placeholder="搜索单主 ID / 联系方式 / 日期"
+                 oninput="renderTicketFolder()" />
+        </div>
+
+        <div class="ticket-folder-grid" id="ticketFolderGrid"></div>
+
+        <div class="ticket-folder-more-wrap" id="ticketFolderMoreWrap" style="display:none;">
+          <button type="button" class="ticket-folder-more-btn" id="ticketFolderMoreBtn" onclick="loadMoreTicketFolder()">加载更多</button>
+        </div>
+
+        <div class="ticket-folder-empty" id="ticketFolderEmpty" style="display:none;">
+          <div class="ticket-folder-empty-icon">📸</div>
+          <div class="ticket-folder-empty-text">
+            票夹里还没有小票<br>
+            <span class="ticket-folder-empty-sub">完成结单后，小票会自动归档到这里</span>
+          </div>
+        </div>
+
+        <div class="ticket-folder-empty" id="ticketFolderNoMatch" style="display:none;">
+          <div class="ticket-folder-empty-icon">🔍</div>
+          <div class="ticket-folder-empty-text">没有匹配的小票</div>
+        </div>
+      </section>
+    </section>
+
+    <section class="page" id="pagePriceList">
+      <div class="page-head price-list-head">
+        <h1>价目表</h1>
+        <div class="price-list-head-actions">
+          <button class="action-btn td-mini-btn" onclick="openPriceListSettings()">编辑</button>
+          <button class="action-btn ghost td-mini-btn" onclick="savePriceListImage()">保存图片</button>
+          <button class="action-btn ghost td-mini-btn" onclick="backFromPriceList()">← 返回</button>
+        </div>
+      </div>
+
+      <section class="panel price-list-preview-panel">
+        <div class="price-list-pages" id="priceListPages"></div>
+        <div class="price-list-empty" id="priceListEmpty" style="display:none;">
+          <div class="price-list-empty-icon">🏷️</div>
+          <div class="price-list-empty-title">还没有价目表内容</div>
+          <div class="price-list-empty-desc">
+            点右上角「编辑」进入设置页，<br>
+            可以一键从「稿件预设 / 权限 / 附加费用」导入。
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <!-- ══════════ 价目表设置页 ══════════ -->
+<section class="page" id="pagePriceListSettings">
+  <div class="pl-settings-layout" id="plSettingsLayout">
+
+    <!-- 左：设置内容 -->
+    <div class="pl-settings-main">
+
+      <div class="page-head price-list-head">
+        <h1>价目表设置</h1>
+        <div class="price-list-head-actions">
+          <button class="action-btn ghost td-mini-btn" onclick="savePriceListPreset()">存储</button>
+          <button class="action-btn ghost td-mini-btn" onclick="openPriceListPresetPicker()">加载</button>
+          <button class="action-btn ghost td-mini-btn" onclick="resetPriceListSettings()">恢复</button>
+          <button class="action-btn ghost td-mini-btn" onclick="backFromPriceListSettings()">← 返回</button>
+        </div>
+      </div>
+
+      <!-- 移动端：预览折叠条 -->
+      <div class="pl-mobile-preview-toggle" id="plMobilePreviewToggle" onclick="togglePlMobilePreview()">
+        <span class="pl-mobile-preview-label">实时预览</span>
+        <span class="pl-mobile-preview-arrow">▼</span>
+      </div>
+
+      <!-- 移动端：预览展开区 -->
+      <div class="pl-mobile-preview-body" id="plMobilePreviewBody">
+        <div class="pl-settings-preview-pages" id="plMobilePreviewPages"></div>
+      </div>
+
+      <div class="rs-tabs pl-tabs">
+        <button class="rs-tab active" data-tab="content" onclick="switchPlTab('content')">内容</button>
+        <button class="rs-tab" data-tab="style" onclick="switchPlTab('style')">样式</button>
+      </div>
+
+      <!-- ─────────── 内容 Tab ─────────── -->
+      <div class="pl-pane active" id="plPaneContent">
+
+        <section class="panel">
+          <h2 class="section-title">快捷操作</h2>
+          <div class="pl-import-row">
+            <button class="action-btn" onclick="importPriceListFromSettings()">一键导入</button>
+            <button class="action-btn ghost" onclick="openPlProcessModal()">约稿流程</button>
+            <button class="action-btn ghost" onclick="openPlNoticeModal()">约稿须知</button>
+          </div>
+          <p class="setting-desc" style="margin-top:12px;">
+            「一键导入」会<strong>覆盖</strong>当前价目表内容（外观不受影响）。<br>
+            「约稿流程 / 约稿须知」是<strong>全局共用</strong>的，填写一次后所有价目表都会自动使用。
+          </p>
+
+          <div class="flow-switch-row">
+            <div>
+              <div class="flow-switch-label">流程 / 须知另起一页</div>
+              <div class="flow-switch-sub">
+                开启：流程和须知强制新开一页<br>
+                关闭：接在价目表内容末尾
+              </div>
+            </div>
+            <label class="switch-wrap">
+              <span class="switch">
+                <input type="checkbox" id="plProcessNewPage" onchange="onPlProcessNewPageChange()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 class="section-title">文案区</h2>
+
+          <!-- 署名 -->
+          <div class="section-head-row" style="margin-top:0;">
+            <div class="flow-switch-label" style="flex:0 0 auto;">署名</div>
+            <input id="plTitleSign" oninput="onPlContentChange()" placeholder="署名内容"
+                   style="flex:1;min-width:0;margin:0;font-size:13px;" />
+            <label class="switch-wrap" title="关闭后不显示署名">
+              <span class="switch">
+                <input type="checkbox" id="plTitleEnabled" onchange="onPlTitleEnabledChange()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+
+          <!-- 表尾说明 -->
+          <div class="section-head-row" style="margin-top:24px;">
+            <div style="flex:1;min-width:0;">
+              <div class="flow-switch-label">表尾说明</div>
+              <div class="flow-switch-sub">显示在页面底部固定位置；关闭则留白</div>
+            </div>
+            <label class="switch-wrap" title="关闭后不显示表尾说明">
+              <span class="switch">
+                <input type="checkbox" id="plBottomEnabled" onchange="onPlBottomEnabledChange()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+          <div id="plBottomBlock" style="margin-top:12px;">
+            <textarea id="plBottomText" rows="2" oninput="onPlContentChange()"
+                      placeholder="投递方式 / 定金 / 联系方式…"></textarea>
+          </div>
+        </section>
+
+        <!-- 价格分类 -->
+        <section class="panel">
+          <h2 class="section-title">价格分类</h2>
+          <div id="plCategoriesContainer"></div>
+          <button class="add-item-btn" onclick="addPriceCategory()">+ 添加分类</button>
+        </section>
+
+        <!-- 附加模块 -->
+        <section class="panel">
+          <div class="section-head-row" style="margin-top:0;">
+            <h2 class="section-title" style="flex:1;margin:0;">附加模块</h2>
+            <label class="switch-wrap" title="横排：内容排成一行（放不下自动换行）">
+              <span class="switch-label-text">横排</span>
+              <span class="switch">
+                <input type="checkbox" id="plHorizontalModules" onchange="onPlHorizontalToggle()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+          <div id="plModulesContainer" style="margin-top:14px;"></div>
+        </section>
+
+      </div>
+
+      <!-- ─────────── 样式 Tab ─────────── -->
+      <div class="pl-pane" id="plPaneStyle">
+
+        <section class="panel">
+          <h2 class="section-title">模板</h2>
+          <div class="pl-template-grid" id="plTemplateGrid"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head-row" style="margin-top:0;">
+            <h2 class="section-title" style="flex:1;margin:0;">基础样式</h2>
+            <label class="switch-wrap" title="跟随主题">
+              <span class="switch-label-text">跟随主题</span>
+              <span class="switch">
+                <input type="checkbox" id="plFollowTheme" onchange="onPlStyleChange()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+
+          <label>布局</label>
+          <div class="flow-options" id="plLayoutOptions">
+            <button type="button" class="flow-opt-btn active" data-mode="double"
+                    onclick="setPlLayout('double')">双栏</button>
+            <button type="button" class="flow-opt-btn" data-mode="single"
+                    onclick="setPlLayout('single')">单栏</button>
+          </div>
+
+          <label>分页模式</label>
+          <div class="flow-options" id="plPaginationOptions">
+            <button type="button" class="flow-opt-btn active" data-mode="auto"
+                    onclick="setPlPagination('auto')">自动分页</button>
+            <button type="button" class="flow-opt-btn" data-mode="manual"
+                    onclick="setPlPagination('manual')">手动分页</button>
+          </div>
+
+          <label>分类标题样式</label>
+          <div class="flow-options" id="plCategoryStyleOptions">
+            <button type="button" class="flow-opt-btn active" data-mode="block"
+                    onclick="setPlCategoryStyle('block')">色块</button>
+            <button type="button" class="flow-opt-btn" data-mode="number"
+                    onclick="setPlCategoryStyle('number')">编号</button>
+            <button type="button" class="flow-opt-btn" data-mode="pill"
+                    onclick="setPlCategoryStyle('pill')">胶囊</button>
+            <button type="button" class="flow-opt-btn" data-mode="bar"
+                    onclick="setPlCategoryStyle('bar')">竖线</button>
+          </div>
+
+          <label>附加模块标题样式</label>
+          <div class="flow-options" id="plModuleStyleOptions">
+            <button type="button" class="flow-opt-btn active" data-mode="block"
+                    onclick="setPlModuleStyle('block')">色块</button>
+            <button type="button" class="flow-opt-btn" data-mode="number"
+                    onclick="setPlModuleStyle('number')">编号</button>
+            <button type="button" class="flow-opt-btn" data-mode="pill"
+                    onclick="setPlModuleStyle('pill')">胶囊</button>
+            <button type="button" class="flow-opt-btn" data-mode="bar"
+                    onclick="setPlModuleStyle('bar')">竖线</button>
+          </div>
+
+          <label>流程须知标题样式</label>
+          <div class="flow-options" id="plNoticeStyleOptions">
+            <button type="button" class="flow-opt-btn active" data-mode="block"
+                    onclick="setPlNoticeStyle('block')">色块</button>
+            <button type="button" class="flow-opt-btn" data-mode="number"
+                    onclick="setPlNoticeStyle('number')">编号</button>
+            <button type="button" class="flow-opt-btn" data-mode="pill"
+                    onclick="setPlNoticeStyle('pill')">胶囊</button>
+            <button type="button" class="flow-opt-btn" data-mode="bar"
+                    onclick="setPlNoticeStyle('bar')">竖线</button>
+          </div>
+
+          <div class="flow-switch-row">
+            <div>
+              <div class="flow-switch-label">点线连接价格</div>
+              <div class="flow-switch-sub">条目名与价格之间用点线连接</div>
+            </div>
+            <label class="switch-wrap">
+              <span class="switch">
+                <input type="checkbox" id="plShowDotted" onchange="onPlStyleChange()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2 class="section-title">字体</h2>
+
+          <label>字体</label>
+          <select id="plFont" onchange="onPlStyleChange()"></select>
+
+          <label>字体大小</label>
+          <div class="range-row">
+            <div class="range-with-dot pl-range-with-dot">
+              <input type="range" id="plFontSize" min="10" max="20" step="0.5" value="13.5"
+                     oninput="onPlStyleChange()" />
+              <button type="button" class="range-default-dot pl-font-size-dot"
+                      onclick="resetPlFontSize()" title="点击恢复默认字体大小 13.5px"></button>
+            </div>
+            <span class="range-val" id="plFontSizeVal">13.5px</span>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-head-row" style="margin-top:0;">
+            <h2 class="section-title" style="flex:1;margin:0;">颜色</h2>
+            <button type="button" class="color-reset-btn" onclick="resetPlColors()" title="恢复默认颜色">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="1 4 1 10 7 10"/>
+                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+              </svg>
+            </button>
+          </div>
+
+          <label>标题文字色（三种标题共用）</label>
+          <input type="color" id="plColorTitle" oninput="onPlStyleChange()" />
+
+          <div class="flow-switch-row" style="padding-top:10px;">
+            <div>
+              <div class="flow-switch-label">装饰色统一</div>
+              <div class="flow-switch-sub">开启后，三种标题的装饰元素共用一个颜色</div>
+            </div>
+            <label class="switch-wrap">
+              <span class="switch">
+                <input type="checkbox" id="plDecoUnified" onchange="onPlDecoUnifiedToggle()" />
+                <span class="switch-slider"></span>
+              </span>
+            </label>
+          </div>
+
+          <div id="plDecoUnifiedBlock">
+            <label>装饰色</label>
+            <input type="color" id="plDecoColor" oninput="onPlStyleChange()" />
+          </div>
+
+          <div id="plDecoSplitBlock">
+            <label>分类标题装饰色</label>
+            <input type="color" id="plDecoCategory" oninput="onPlStyleChange()" />
+
+            <label>附加模块标题装饰色</label>
+            <input type="color" id="plDecoModule" oninput="onPlStyleChange()" />
+
+            <label>流程须知标题装饰色</label>
+            <input type="color" id="plDecoNotice" oninput="onPlStyleChange()" />
+          </div>
+
+          <label>内容色（条目名、价格、正文）</label>
+          <input type="color" id="plColorContent" oninput="onPlStyleChange()" />
+
+          <label>小字色（备注、注脚）</label>
+          <input type="color" id="plColorSmall" oninput="onPlStyleChange()" />
+        </section>
+
+        <section class="panel">
+          <h2 class="section-title">背景图</h2>
+
+          <div class="rs-file-row">
+            <label class="upload-btn" for="plBgImgInput">＋ 上传背景图</label>
+            <input type="file" id="plBgImgInput" class="file-input" accept="image/*" />
+            <button class="rs-btn-sm ghost" onclick="clearPriceListImg('bg')">清除</button>
+          </div>
+
+          <label>背景图透明度</label>
+          <div class="range-row">
+            <input type="range" id="plBgOpacity" min="0" max="1" step="0.05" value="1"
+                   oninput="onPlStyleChange()" />
+            <span class="range-val" id="plBgOpacityVal">100%</span>
+          </div>
+        </section>
+
+      </div>
+    </div>
+
+    <!-- 右：桌面端预览 -->
+    <aside class="pl-settings-preview" id="plSettingsPreview">
+      <div class="pl-settings-preview-head">实时预览</div>
+      <div class="pl-settings-preview-pages" id="plDesktopPreviewPages"></div>
+    </aside>
+
+  </div>
+</section>
+
+    <section class="page" id="pageMemo">
+      <div class="page-head">
+        <h1>备忘录</h1>
+        <button class="action-btn ghost td-mini-btn" onclick="backFromMemo()">← 返回</button>
+      </div>
+
+      <section class="panel memo-input-panel">
+        <div class="memo-input-row">
+          <input id="memoInput" class="memo-input" placeholder="写点什么..." maxlength="200"
+                 onkeydown="if(event.key==='Enter')addMemoItem()" />
+          <button type="button" class="action-btn memo-add-btn" onclick="addMemoItem()">添加</button>
+        </div>
+        <div class="memo-date-row">
+          <label class="memo-date-label" for="memoDueDate">执行日期（可选）</label>
+          <input id="memoDueDate" type="date" class="memo-date-input" />
+        </div>
+      </section>
+
+      <section class="panel">
+        <div id="memoListContainer"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageSettings">
+      <div class="page-head"><h1>设置</h1></div>
+      <section class="panel">
+        <button class="action-btn" onclick="showPage('pageBasicSetting')">基础信息</button>
+        <p class="setting-desc">身份 / ID / 接单平台 / 定金预设 / 权限预设。</p>
+        <button class="action-btn" onclick="openPresetSetting()">稿件预设</button>
+        <p class="setting-desc">管理稿件预设：固定价 / 单双面 / 基础+增项 / 按节点计价。</p>
+        <button class="action-btn" onclick="openExtraPresetSetting()">附加费用</button>
+        <p class="setting-desc">用于「稿件组」与「订单级」附加费用。</p>
+        <button class="action-btn" onclick="openDiscountPresetSetting()">优惠折扣</button>
+        <p class="setting-desc" style="margin-bottom:0;">用于「稿件组」与「订单级」优惠。</p>
+      </section>
+    </section>
+
+    <section class="page" id="pagePresetSetting">
+      <div class="page-head">
+        <h1>稿件预设</h1>
+        <button class="action-btn ghost" onclick="showPage('pageSettings')" style="padding:8px 16px;">← 返回</button>
+      </div>
+      <section class="panel">
+        <div class="preset-top-actions">
+          <button class="action-btn" onclick="openPresetAddModal()">+ 添加预设</button>
+          <button class="action-btn ghost" onclick="openPresetGroupAddModal()">+ 添加分组</button>
+        </div>
+        <div id="presetCards"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageExtraPreset">
+      <div class="page-head">
+        <h1>附加费用</h1>
+        <button class="action-btn ghost" onclick="showPage('pageSettings')" style="padding:8px 16px;">← 返回</button>
+      </div>
+      <section class="panel">
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <button class="action-btn" onclick="openExtraPresetAddModal()">+ 添加附加费用预设</button>
+        </div>
+        <div id="extraPresetCards"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageDiscountPreset">
+      <div class="page-head">
+        <h1>优惠折扣</h1>
+        <button class="action-btn ghost" onclick="showPage('pageSettings')" style="padding:8px 16px;">← 返回</button>
+      </div>
+      <section class="panel">
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <button class="action-btn" onclick="openDiscountPresetAddModal()">+ 添加优惠折扣预设</button>
+        </div>
+        <div id="discountPresetCards"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageBasicSetting">
+      <div class="page-head">
+        <h1>基础信息</h1>
+        <button class="action-btn ghost" onclick="showPage('pageSettings')" style="padding:8px 16px;">← 返回</button>
+      </div>
+      <section class="panel">
+        <div class="module" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>身份</label>
+            <select id="setIdentity" onchange="syncMainFromSettings()"></select>
+          </div>
+          <div>
+            <label>ID</label>
+            <input id="setName" oninput="syncMainFromSettings()" />
+          </div>
+        </div>
+        <p class="setting-hint" id="setIdentityHint">身份通过下方预设增删。</p>
+
+        <div style="margin-top:24px;">
+          <label style="margin-top:0;">身份预设（可增删、可改名称）</label>
+          <div id="identityList"></div>
+          <button class="add-item-btn" onclick="openAddIdentityModal()" style="margin-top:6px;">+ 添加身份</button>
+        </div>
+
+        <div style="margin-top:24px;">
+          <label style="margin-top:0;">接单平台（主页默认选中此项）</label>
+          <select id="setPlatform" onchange="onSetPlatformChange()"></select>
+          <p class="setting-hint">下拉最后一项「＋ 添加平台」可打开管理窗口。</p>
+        </div>
+
+        <div class="module" style="grid-template-columns: 1fr 1fr; margin-top:24px;">
+          <div>
+            <label style="margin-top:0;">定金预设模式</label>
+            <select id="setDepositMode" onchange="syncDepositFromSettings()">
+              <option value="percent">百分比 %</option>
+              <option value="amount">固定金额 ¥</option>
+            </select>
+          </div>
+          <div>
+            <label style="margin-top:0;">定金预设数值</label>
+            <div class="input-unit-wrap suffix" id="setDepositWrap">
+              <input id="setDeposit" type="number" step="0.01" value="20" oninput="syncDepositFromSettings()" />
+              <span class="input-unit" id="setDepositUnit">%</span>
+            </div>
+          </div>
+        </div>
+        <p class="setting-hint">主页定金默认使用此预设，主页仍可临时修改。</p>
+
+        <div style="margin-top:24px;">
+          <label style="margin-top:0;">使用权限预设（主页同步显示）</label>
+          <div id="permissionList"></div>
+          <button class="add-item-btn" onclick="openAddPermissionModal()" style="margin-top:6px;">+ 添加权限</button>
+          <p class="setting-hint">可修改名称与倍率，也可增删。</p>
+        </div>
+      </section>
+    </section>
+
+    <section class="page" id="pageDataSync">
+      <div class="page-head">
+        <h1>数据同步</h1>
+        <button class="action-btn ghost" onclick="showPage('pageMain')" style="padding:8px 16px;">← 返回</button>
+      </div>
+      <section class="panel">
+        <h2 class="section-title">手动同步</h2>
+        <p class="setting-desc" style="margin-top:0;">
+          导出全部数据为 JSON 文件，或从 JSON 文件恢复数据。<br>
+          备份内容包含：预设、权限、平台、定金、小票设置、小票预设列表、订单、流水、结单 / 撤单 / 废稿记录、单主备注等。
+        </p>
+        <button class="action-btn" onclick="exportAllData()">导出数据</button>
+        <button class="action-btn" onclick="importAllData()" style="margin-top:10px;">导入数据</button>
+        <button class="action-btn" onclick="resetAllData()" style="margin-top:10px;background:#c0392b;border-color:#c0392b;">恢复初始</button>
+        <p class="setting-hint" style="margin-top:14px;">
+          提示：导入时会覆盖同名数据，但不会删除本设备上备份里没有的项。<br>
+          「数据修复」在工具箱里，会自动检测历史订单、流水、小票快照，并按当前版本规则补全字段、补录流水、建立单主档案，用于统计与单主对账。
+        </p>
+      </section>
+    </section>
+
+    <section class="page" id="pageUserManual">
+      <div class="page-head">
+        <h1>用户手册</h1>
+        <button class="action-btn ghost td-mini-btn" onclick="backFromUserManual()">← 返回</button>
+      </div>
+      <section class="panel user-manual-panel">
+        <nav class="um-nav" id="umNav"></nav>
+        <div class="um-content" id="umContent"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageAnnouncementHistory">
+      <div class="page-head">
+        <h1>更新公告</h1>
+        <button class="action-btn ghost td-mini-btn" onclick="backFromAnnouncementHistory()">← 返回</button>
+      </div>
+      <section class="panel">
+        <div id="announcementHistoryList" class="announcement-history-list"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageSchedule">
+      <div class="page-head"><h1>排单</h1></div>
+
+      <section class="panel sched-panel">
+        <div class="sched-head">
+          <button class="sched-arrow" type="button" onclick="schedShiftMonth(-1)" aria-label="上一月">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="15 6 9 12 15 18"/>
+            </svg>
+          </button>
+
+          <div class="sched-ym">
+            <select id="schedYear" class="sched-year" onchange="onSchedYearChange()"></select>
+            <span class="sched-ym-sep">年</span>
+            <select id="schedMonth" class="sched-month" onchange="onSchedMonthChange()"></select>
+            <span class="sched-ym-sep">月</span>
+          </div>
+
+          <button class="sched-arrow" type="button" onclick="schedShiftMonth(1)" aria-label="下一月">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="9 6 15 12 9 18"/>
+            </svg>
+          </button>
+
+          <button class="sched-today" type="button" onclick="schedGoToday()" aria-label="回到今天">今</button>
+        </div>
+
+        <div class="sched-legend">
+          <span class="sched-legend-item"><i class="sched-dot is-deadline"></i>截稿</span>
+          <span class="sched-legend-item"><i class="sched-dot is-placeholder"></i>开单（占位单）</span>
+          <span class="sched-legend-item"><i class="sched-dot is-both"></i>截稿 + 开单</span>
+        </div>
+
+        <div class="sched-weekdays">
+          <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+        </div>
+
+        <div class="sched-grid" id="schedGrid"></div>
+        <div class="sched-month-summary" id="schedMonthSummary"></div>
+      </section>
+
+      <section class="panel sched-day-panel" id="schedDayPanel" style="display:none;">
+        <div class="sched-day-head">
+          <h2 class="section-title" id="schedDayTitle">—</h2>
+          <button class="icon-btn" type="button" onclick="closeSchedDayPanel()" title="关闭">×</button>
+        </div>
+        <div class="sched-day-list" id="schedDayList"></div>
+      </section>
+    </section>
+
+    <section class="page" id="pageStats">
+      <div class="page-head stats-page-head">
+        <h1>统计</h1>
+        <button type="button" class="stats-record-btn" onclick="openRecordModal()" title="记账">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="3" width="13" height="18" rx="2"/>
+            <path d="M8 3 V21"/>
+            <path d="M11 8 H14"/><path d="M11 12 H14"/><path d="M11 16 H13"/>
+            <path d="M17.5 14.5 L20.5 11.5 L22 13 L19 16 L16.5 16.5 Z"/>
+          </svg>
+          <span>记账</span>
+        </button>
+      </div>
+
+      <section class="panel stats-range-panel">
+        <div class="stats-range-bar">
+          <button type="button" class="stats-range-btn active" data-range="month" onclick="switchStatsRange('month')">月</button>
+          <button type="button" class="stats-range-btn" data-range="year" onclick="switchStatsRange('year')">年</button>
+          <button type="button" class="stats-range-btn" data-range="week" onclick="switchStatsRange('week')">本周</button>
+          <button type="button" class="stats-range-btn" data-range="last7" onclick="switchStatsRange('last7')">最近七天</button>
+          <button type="button" class="stats-range-btn" data-range="custom" onclick="switchStatsRange('custom')">自定义</button>
+        </div>
+        <div class="stats-ym-row" id="statsYmRow">
+          <select id="statsYear" class="stats-year" onchange="onStatsYearChange()"></select>
+          <span class="stats-ym-sep">年</span>
+          <select id="statsMonth" class="stats-month" onchange="onStatsMonthChange()"></select>
+          <span class="stats-ym-sep" id="statsMonthLabel">月</span>
+        </div>
+        <div class="stats-custom-row" id="statsCustomRow" style="display:none;">
+          <input type="date" id="statsStartDate" class="stats-date-input" />
+          <span class="stats-range-sep">至</span>
+          <input type="date" id="statsEndDate" class="stats-date-input" />
+          <button type="button" class="action-btn ghost stats-apply-btn" onclick="applyStatsCustomRange()">确定</button>
+        </div>
+        <p class="stats-range-hint" id="statsRangeHint"></p>
+      </section>
+
+      <section class="panel stats-balance-panel">
+        <div class="stats-balance-label">收支合计</div>
+        <div class="stats-balance-value" id="statsBalance">¥0.00</div>
+        <div class="stats-balance-sub">实收 − 退款 − 支出</div>
+      </section>
+
+      <section class="panel stats-grid-panel">
+        <div class="stats-grid">
+          <button type="button" class="stats-card" onclick="openStatsDetail('income')">
+            <div class="stats-card-title">统计实收</div>
+            <div class="stats-card-value" id="statsIncome">¥0.00</div>
+            <div class="stats-card-sub">预收 + 尾款 + 记账收入</div>
+          </button>
+          <button type="button" class="stats-card" onclick="openStatsDetail('pending')">
+            <div class="stats-card-title">统计待结</div>
+            <div class="stats-card-value" id="statsPending">¥0.00</div>
+            <div class="stats-card-sub">未完单尾款汇总</div>
+          </button>
+          <button type="button" class="stats-card" onclick="openStatsDetail('refund')">
+            <div class="stats-card-title">统计退款</div>
+            <div class="stats-card-value" id="statsRefund">¥0.00</div>
+            <div class="stats-card-sub">记账类型：退款</div>
+          </button>
+          <button type="button" class="stats-card" onclick="openStatsDetail('expense')">
+            <div class="stats-card-title">统计支出</div>
+            <div class="stats-card-value" id="statsExpense">¥0.00</div>
+            <div class="stats-card-sub">不含退款</div>
+          </button>
+          <div class="stats-card is-static">
+            <div class="stats-card-title">统计客户</div>
+            <div class="stats-card-value" id="statsClient">0 位</div>
+            <div class="stats-card-sub">按单主ID去重</div>
+          </div>
+          <div class="stats-card is-static">
+            <div class="stats-card-title">统计订单</div>
+            <div class="stats-card-value" id="statsOrder">0 份</div>
+            <div class="stats-card-sub">含占位单</div>
+          </div>
+          <div class="stats-card is-static">
+            <div class="stats-card-title">统计撤单</div>
+            <div class="stats-card-value" id="statsCancel">0 份</div>
+            <div class="stats-card-sub"></div>
+          </div>
+          <div class="stats-card is-static">
+            <div class="stats-card-title">统计废稿</div>
+            <div class="stats-card-value" id="statsDiscard">0 份</div>
+            <div class="stats-card-sub"></div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="script.js"></script>
+
+</body>
+</html>
