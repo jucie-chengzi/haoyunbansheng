@@ -27,6 +27,13 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
+    fetch(e.request)
+      .then(response => {
+        // 网络成功：更新缓存
+        const copy = response.clone();
+        caches.open(CACHE).then(cache => cache.put(e.request, copy));
+        return response;
+      })
+      .catch(() => caches.match(e.request))  // 网络失败：用缓存（离线可用）
   );
 });
