@@ -4195,14 +4195,15 @@ body.is-preset-dragging {
 :root[data-theme="cute-ins"] h2.section-title {
   color: var(--theme-primary-deep);
   border-bottom: 2px dashed var(--line-soft);
-  padding-left: 22px;
+  padding-left: 26px;
   position: relative;
 }
 :root[data-theme="cute-ins"] h2.section-title::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 50%;
+  /* ★ 用"内容区域中线"定位，排除 padding-bottom 的干扰 */
+  top: calc((100% - 8px) / 2);
   width: 12px;
   height: 12px;
   transform: translateY(-50%);
@@ -4669,14 +4670,14 @@ body.is-preset-dragging {
 :root[data-theme="guava"] h2.section-title {
   color: var(--p-deep);
   border-bottom: 2px dashed var(--line-soft);
-  padding-left: 22px;
+  padding-left: 26px;
   position: relative;
 }
 :root[data-theme="guava"] h2.section-title::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 50%;
+  top: calc((100% - 8px) / 2);
   width: 12px;
   height: 12px;
   transform: translateY(-50%);

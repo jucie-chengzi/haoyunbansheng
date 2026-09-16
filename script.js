@@ -18835,6 +18835,7 @@ function onPlContentChange() {
   if ($('plTitleSign'))  data.signature.content = $('plTitleSign').value;
   if ($('plBottomText')) data.footer.text = $('plBottomText').value;
   setPriceList(data);
+  schedulePlPreviewRender();   /* ★ 触发预览重绘 */
 }
 
 
