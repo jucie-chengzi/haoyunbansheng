@@ -19404,16 +19404,30 @@ async function savePriceListImage() {
     return;
   }
 
-  /* 导出前临时隐藏页码 */
+  /* ★ 导出前把画布临时撑到设计宽度 640px，避免手机端被压缩后变糊 */
+  const originalStyles = [];
+  pages.forEach(p => {
+    originalStyles.push({
+      width: p.style.width,
+      maxWidth: p.style.maxWidth,
+    });
+    p.style.width = '640px';
+    p.style.maxWidth = '640px';
+  });
+
+  /* 等一帧，让布局生效 */
+  await new Promise(r => requestAnimationFrame(r));
+
+  /* 隐藏页码 */
   const nums = document.querySelectorAll('.pl-page-num');
   nums.forEach(el => { el.dataset.oldDisplay = el.style.display; el.style.display = 'none'; });
 
   try {
     for (let i = 0; i < pages.length; i++) {
       const canvas = await html2canvas(pages[i], {
-        scale: 2,
+        scale: 3,
         backgroundColor: '#ffffff',
-        useCORS: true
+        useCORS: true,
       });
       const link = document.createElement('a');
       const suffix = pages.length > 1 ? ('_' + (i + 1)) : '';
@@ -19427,6 +19441,11 @@ async function savePriceListImage() {
   } catch (err) {
     alert('生成图片失败：' + (err && err.message ? err.message : '未知'));
   } finally {
+    /* 恢复 */
+    pages.forEach((p, i) => {
+      p.style.width = originalStyles[i].width;
+      p.style.maxWidth = originalStyles[i].maxWidth;
+    });
     nums.forEach(el => { el.style.display = el.dataset.oldDisplay || ''; });
   }
 }
