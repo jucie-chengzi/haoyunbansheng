@@ -1,4 +1,4 @@
-const CACHE = 'haoyunbansheng-v3';
+const CACHE = 'haoyunbansheng-v4';
 const URLS = [
   './',
   './index.html',
