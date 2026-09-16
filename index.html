@@ -25,8 +25,6 @@
   } catch (e) {}
 })();
 </script>
-<script charset="UTF-8" id="LA_COLLECT" src="//sdk.51.la/js-sdk-pro.min.js"></script>
-<script>LA.init({id:"3RDaPHTLFz7PXpYm",ck:"3RDaPHTLFz7PXpYm"})</script>
 </head>
 <body>
 
@@ -498,22 +496,17 @@
 
               <label>字体（中英文统一）</label>
               <select id="rsFont" onchange="applyReceiptSettings()">
-                <option value="system">系统默认</option>
-                <option value="'PingFang SC','Microsoft YaHei',sans-serif">苹方 / 微软雅黑</option>
-                <option value="'Source Han Sans SC','Noto Sans SC','Microsoft YaHei',sans-serif">思源黑体</option>
+                <option value="system">系统默认（思源黑体）</option>
+                <option value="'Source Han Sans SC','Noto Sans SC',sans-serif">思源黑体</option>
                 <option value="'Source Han Serif SC','Noto Serif SC','Songti SC',serif">思源宋体</option>
-                <option value="'KaiTi','STKaiti','Kaiti SC',serif">楷体</option>
-                <option value="'YouYuan','STYuanti','Yuanti SC',cursive">幼圆</option>
-                <option value="Georgia,'Times New Roman',serif">Georgia / Times</option>
-                <option value="'Times New Roman',Times,serif">Times New Roman</option>
-                <option value="'Courier New',Courier,monospace">Courier New</option>
                 <option value="'Slideyouran','Yanshi Youran Xiaokai',cursive">演示悠然小楷（在线）</option>
                 <option value="'Playball',cursive">Playball（在线 · 英文）</option>
                 <option value="'Alex Brush',cursive">Alex Brush（在线 · 英文花体）</option>
               </select>
               <p class="rs-tip-sm">
-                演示悠然小楷、Playball、Alex Brush 通过 CDN 在线加载。
-                其它字体请用下方「导入本地字体」上传。
+                演示悠然小楷、Playball、Alex Brush 通过 CDN 在线加载。<br>
+                以上字体均免费可商用。<br>
+                其它字体请用下方「导入本地字体」上传。请使用可商字体。
               </p>
 
               <label>字体大小</label>
@@ -1712,6 +1705,21 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
-
+<!-- 51.LA 统计（异步加载，不阻塞页面） -->
+<script>
+(function () {
+  if (location.protocol === 'file:') return;
+  var s = document.createElement('script');
+  s.charset = 'UTF-8';
+  s.src = 'https://sdk.51.la/js-sdk-pro.min.js';
+  s.async = true;
+  s.onload = function () {
+    if (window.LA && LA.init) {
+      LA.init({id:"3RDaPHTLFz7PXpYm", ck:"3RDaPHTLFz7PXpYm"});
+    }
+  };
+  document.head.appendChild(s);
+})();
+</script>
 </body>
 </html>

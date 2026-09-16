@@ -522,7 +522,7 @@ textarea.field-error { border-color: var(--red) !important; }
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
 body {
-  font-family: "Inter", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", Arial, sans-serif;
+  font-family: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   font-size: 14px; line-height: 1.55;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
@@ -699,7 +699,7 @@ button.action-btn:hover { opacity: 0.86; }
   --pad-y: 30px;
   padding: var(--pad-y) var(--pad-x);
 
-  --rc-font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Inter", "Helvetica Neue", Arial, sans-serif;
+  --rc-font: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --rc-ink: #111111;
   --rc-ink-soft: #555555;
   --rc-font-size: 13.5px;
@@ -709,9 +709,7 @@ button.action-btn:hover { opacity: 0.86; }
   --line: var(--rc-line);
   --line-soft: var(--rc-line);
 
-  font-family: var(--rc-font),
-               "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
-               "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--rc-font);
   font-size: var(--rc-font-size);
   color: var(--rc-ink);
 }
@@ -1031,7 +1029,12 @@ input[type="file"].file-input { display: none; }
   background: rgba(255,255,255,0.9); border-radius: 50%;
 }
 .receipt-photo { margin: 0 0 14px; text-align: center; }
-.receipt-photo img { display: block; width: 100%; max-height: 300px; object-fit: contain; margin: 0 auto; }
+.receipt-photo img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
 
 
 /* ══════════ [CSS-10B] 本地字体导入 ══════════ */
@@ -5253,7 +5256,7 @@ body.is-preset-dragging {
   border: 1px solid var(--line-soft);
   overflow: hidden;
 
-  --pl-font: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --pl-font: "Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --pl-font-size: 13.5px;
   --pl-ink: #111111;
   --pl-ink-soft: #555555;
@@ -8022,4 +8025,45 @@ body.is-preset-dragging {
 .cancelled-card.is-selected .order-select-circle svg,
 .discarded-card.is-selected .order-select-circle svg {
   color: #2b7fff;
+}
+/* ══════════ 版权与免责声明弹窗 ══════════ */
+.copyright-content {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.copyright-content h4 {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 20px 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line-soft);
+}
+.copyright-content h4:first-child {
+  margin-top: 0;
+}
+.copyright-content h5 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 14px 0 6px;
+  letter-spacing: 0.02em;
+}
+.copyright-content p {
+  margin: 6px 0;
+  color: var(--ink-soft);
+}
+.copyright-content ul {
+  margin: 6px 0;
+  padding-left: 22px;
+}
+.copyright-content li {
+  margin: 4px 0;
+  color: var(--ink-soft);
+}
+.copyright-content strong {
+  color: var(--ink);
+  font-weight: 700;
 }

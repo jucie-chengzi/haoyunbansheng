@@ -25,7 +25,7 @@
 /* ══════════ [U-01] 全局常量 / 存储 key ══════════ */
 
 /* ---- 应用版本（用于更新公告） ---- */
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.1.1';
 const ANNOUNCEMENT_SEEN_KEY = 'listReceiptAnnouncementSeen';
 
 /* ---- 数据版本 + 迁移 ---- */
@@ -1249,6 +1249,21 @@ async function resolveImageSrc(ref) {
   return url || '';
 }
 
+/* ★ 安全删除：如果图片被任何预设引用，就跳过 */
+async function safeDeleteImageRef(ref) {
+  if (!ref) return;
+  try {
+    const presets = getReceiptPresetList();
+    const inUse = presets.some(p => p && p.settings && (
+      p.settings.headerImg === ref ||
+      p.settings.footerImg === ref ||
+      p.settings.bgImg     === ref
+    ));
+    if (inUse) return;   /* 被预设引用 → 不删 */
+  } catch (e) {}
+  try { await deleteImageRef(ref); } catch (e) {}
+}
+
 async function deleteImageRef(ref) {
   if (!ref) return;
   const s = String(ref);
@@ -2049,15 +2064,9 @@ const DEFAULT_RECEIPT_SETTINGS = {
 
 /* 字体下拉里每个选项 → 实际 font-family 字符串 */
 const FONT_FAMILY_MAP = {
-  'system': '"PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Inter", "Helvetica Neue", Arial, sans-serif',
-  "'PingFang SC','Microsoft YaHei',sans-serif": "'PingFang SC','Microsoft YaHei',sans-serif",
-  "'Source Han Sans SC','Noto Sans SC','Microsoft YaHei',sans-serif": "'Source Han Sans SC','Noto Sans SC','Microsoft YaHei',sans-serif",
+  'system': '"Source Han Sans SC", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+  "'Source Han Sans SC','Noto Sans SC',sans-serif": "'Source Han Sans SC','Noto Sans SC',sans-serif",
   "'Source Han Serif SC','Noto Serif SC','Songti SC',serif": "'Source Han Serif SC','Noto Serif SC','Songti SC',serif",
-  "'KaiTi','STKaiti','Kaiti SC',serif": "'KaiTi','STKaiti','Kaiti SC',serif",
-  "'YouYuan','STYuanti','Yuanti SC',cursive": "'YouYuan','STYuanti','Yuanti SC',cursive",
-  "Georgia,'Times New Roman',serif": "Georgia,'Times New Roman',serif",
-  "'Times New Roman',Times,serif": "'Times New Roman',Times,serif",
-  "'Courier New',Courier,monospace": "'Courier New',Courier,monospace",
   "'Slideyouran','Yanshi Youran Xiaokai',cursive": "'Slideyouran','Yanshi Youran Xiaokai',cursive",
   "'Playball',cursive": "'Playball',cursive",
   "'Alex Brush',cursive": "'Alex Brush', cursive",
@@ -2366,20 +2375,25 @@ function applyBgImg(src, state, opacity) {
 
   state = state || { w: 0, h: 0, l: 0, t: 0, baseW: 0 };
 
-  const doApply = () => {
+    const doApply = () => {
     wrap.classList.add('has-img');
     img.classList.add('has-img');
     img.style.opacity = (opacity === undefined ? 1 : opacity);
 
     const receipt  = $('receipt');
-    const receiptW = receipt ? receipt.clientWidth  : 560;
-    const receiptH = receipt ? receipt.clientHeight : 800;
+    const receiptW = receipt ? receipt.clientWidth  : 0;
+    const receiptH = receipt ? receipt.clientHeight : 0;
+
+    /* ★ 如果小票是隐藏状态（宽度 0），延后重试 */
+    if (receiptW <= 0) {
+      setTimeout(doApply, 150);
+      return;
+    }
 
     const natW = img.naturalWidth  || 1;
     const natH = img.naturalHeight || 1;
 
     if (!state.w || state.w === 0) {
-      /* 首次：铺满整张小票 */
       img.style.width  = receiptW + 'px';
       img.style.height = receiptH + 'px';
       img.style.left   = '0px';
@@ -2714,6 +2728,8 @@ function fillReceiptSettingsForm() {
 
   if ($('rsColorPrimary'))   $('rsColorPrimary').value = s.colorPrimary || '#111111';
   if ($('rsColorPrimaryHex')) $('rsColorPrimaryHex').value = s.colorPrimary || '#111111';
+  if ($('rsColorSecondary')) $('rsColorSecondary').value = s.colorSecondary || '#555555';
+  if ($('rsColorSecondaryHex')) $('rsColorSecondaryHex').value = s.colorSecondary || '#555555';
   if ($('rsLineColor'))    $('rsLineColor').value    = s.lineColor || '#b8c2cc';
   if ($('rsLineColorHex')) $('rsLineColorHex').value = s.lineColor || '#b8c2cc';
 
@@ -2826,7 +2842,7 @@ function setupReceiptImgInputs() {
         }
 
         if (oldRef && oldRef !== ref) {
-          try { await deleteImageRef(oldRef); } catch (err) {}
+          try { await safeDeleteImageRef(oldRef); } catch (err) {}
         }
 
         const ok = setReceiptSettings(s);
@@ -2861,7 +2877,7 @@ async function clearReceiptImg(kind) {
   setReceiptSettings(s);
 
   if (oldRef) {
-    try { await deleteImageRef(oldRef); } catch (e) {}
+    try { await safeDeleteImageRef(oldRef); } catch (e) {}
   }
 
   applyReceiptSettings();
@@ -3079,24 +3095,66 @@ function confirmSaveReceiptPreset(defaultName) {
   const name = raw || defaultName || '模板';
 
   const list = getReceiptPresetList();
-  if (list.length >= MAX_RECEIPT_PRESETS) {
+
+  /* ★ 判断是否重名 */
+  const existingIdx = list.findIndex(p => p.name === name);
+  const isOverwrite = existingIdx >= 0;
+
+  /* 不重名才检查上限 */
+  if (!isOverwrite && list.length >= MAX_RECEIPT_PRESETS) {
     closeModal();
-    showSimpleAlert('无法新增预设', '最多只能保存 ' + MAX_RECEIPT_PRESETS + ' 个小票预设。');
+    showSimpleAlert('无法新增预设', '最多只能保存 ' + MAX_RECEIPT_PRESETS + ' 个小票预设。<br>请先在「加载」里删掉一个，或者改个名字覆盖已有预设。');
     return;
   }
 
+  /* ★ 关键：保存预设前，强制把当前图片的位置写回 settings */
+  try {
+    const hImg = $('outHeaderImg');
+    const fImg = $('outFooterImg');
+    const bImg = $('outBgImg');
+    if (hImg && hImg.src && hImg.naturalWidth > 0) saveImgState('header', hImg);
+    if (fImg && fImg.src && fImg.naturalWidth > 0) saveImgState('footer', fImg);
+    if (bImg && bImg.src && bImg.naturalWidth > 0) saveBgState();
+  } catch (e) {}
+
+  /* ★ 深拷贝当前所有设置 */
   const settings = JSON.parse(JSON.stringify(getReceiptSettings()));
-  list.push({
-    id: makeReceiptPresetId(),
+
+  /* 字段兜底 */
+  const fields = [
+    'headerImg', 'headerImgState',
+    'footerImg', 'footerImgState',
+    'bgImg', 'bgImgState', 'bgOpacity',
+    'footer1', 'footer2',
+    'bgColor', 'font', 'fontSize',
+    'colorPrimary', 'colorSecondary', 'lineColor'
+  ];
+  fields.forEach(k => {
+    if (settings[k] === undefined && DEFAULT_RECEIPT_SETTINGS[k] !== undefined) {
+      settings[k] = JSON.parse(JSON.stringify(DEFAULT_RECEIPT_SETTINGS[k]));
+    }
+  });
+
+  const preset = {
+    id: isOverwrite ? list[existingIdx].id : makeReceiptPresetId(),
     name: name,
     createdAt: Date.now(),
     settings: settings,
-  });
+  };
+
+  if (isOverwrite) {
+    list[existingIdx] = preset;
+  } else {
+    list.push(preset);
+  }
 
   if (!setReceiptPresetList(list)) return;
 
   closeModal();
-  showSimpleAlert('已保存', '预设「' + escapeHtml(name) + '」已保存。');
+  showSimpleAlert(
+    isOverwrite ? '已覆盖' : '已保存',
+    '预设「' + escapeHtml(name) + '」' + (isOverwrite ? '已覆盖（同名预设被替换）。' : '已保存。')
+  );
 }
 
 function openReceiptPresetPicker() {
@@ -3179,16 +3237,45 @@ function applyReceiptPresetByIndex(idx) {
 
 function applyReceiptPreset(preset) {
   if (!preset || !preset.settings) return;
-  const s = Object.assign({}, DEFAULT_RECEIPT_SETTINGS, preset.settings);
-  delete s.stickers;
-  delete s.stickerImg;
-  delete s.stickerImgState;
+
+
+
+  /* ★ 用默认值兜底 + 应用预设全部字段 */
+  const s = JSON.parse(JSON.stringify(DEFAULT_RECEIPT_SETTINGS));
+  const p = preset.settings;
+
+  /* 基本字段 */
+  if (p.footer1 !== undefined) s.footer1 = p.footer1;
+  if (p.footer2 !== undefined) s.footer2 = p.footer2;
+  if (p.bgColor)        s.bgColor        = p.bgColor;
+  if (p.bgOpacity !== undefined) s.bgOpacity = p.bgOpacity;
+  if (p.font)           s.font           = p.font;
+  if (p.fontSize !== undefined)  s.fontSize = p.fontSize;
+  if (p.colorPrimary)   s.colorPrimary   = p.colorPrimary;
+  if (p.colorSecondary) s.colorSecondary = p.colorSecondary;
+  if (p.lineColor)      s.lineColor      = p.lineColor;
+
+  /* 图片引用 */
+  if (p.headerImg) s.headerImg = p.headerImg;
+  if (p.footerImg) s.footerImg = p.footerImg;
+  if (p.bgImg)     s.bgImg     = p.bgImg;
+
+  /* ★ 图片位置状态（关键！之前可能漏了） */
+  if (p.headerImgState) s.headerImgState = JSON.parse(JSON.stringify(p.headerImgState));
+  if (p.footerImgState) s.footerImgState = JSON.parse(JSON.stringify(p.footerImgState));
+  if (p.bgImgState)     s.bgImgState     = JSON.parse(JSON.stringify(p.bgImgState));
+
   setReceiptSettings(s);
   fillReceiptSettingsForm();
   applyReceiptSettings();
   renderCustomFontList();
+
+  /* 图片加载完后重新绑定编辑手柄 */
   if ($('receiptLayout') && $('receiptLayout').classList.contains('settings-open')) {
-    setTimeout(() => setupReceiptImgDrag(), 100);
+    setTimeout(() => {
+      setupReceiptImgDrag();
+      updateReceiptImageActiveState();
+    }, 200);
   }
 }
 
@@ -3248,19 +3335,54 @@ function resetReceiptSettings() {
 }
 
 async function confirmResetReceiptSettings() {
+  /* ★ 删掉所有图片文件 */
   try {
     const old = getReceiptSettings();
-    if (old.headerImg) await deleteImageRef(old.headerImg);
-    if (old.footerImg) await deleteImageRef(old.footerImg);
-    if (old.bgImg)     await deleteImageRef(old.bgImg);
+    if (old.headerImg) await safeDeleteImageRef(old.headerImg);
+    if (old.footerImg) await safeDeleteImageRef(old.footerImg);
+    if (old.bgImg)     await safeDeleteImageRef(old.bgImg);
   } catch (e) {}
 
+  /* ★ 从 localStorage 彻底删掉设置 */
   try { localStorage.removeItem(RECEIPT_SETTINGS_KEY); } catch (e) {}
+
+  /* ★ 清掉当前激活的图片编辑态 */
   __activeReceiptImage = null;
+
   closeModal();
+
+  /* ★ 重新加载（此时 getReceiptSettings 会返回全新默认值） */
+  const s = getReceiptSettings();
+
+  /* ★ 强制把所有图片引用清空（防止残留） */
+  s.headerImg = '';
+  s.footerImg = '';
+  s.bgImg = '';
+  s.headerImgState = { w: 0, h: 0, l: 0, t: 0, baseW: 0 };
+  s.footerImgState = { w: 0, h: 0, l: 0, t: 0, baseW: 0 };
+  s.bgImgState     = { w: 0, h: 0, l: 0, t: 0, baseW: 0 };
+  setReceiptSettings(s);
+
+  /* ★ 清空 DOM 上的图片 */
+  const headerImg = $('outHeaderImg');
+  const footerImg = $('outFooterImg');
+  const bgImg     = $('outBgImg');
+  if (headerImg) headerImg.removeAttribute('src');
+  if (footerImg) footerImg.removeAttribute('src');
+  if (bgImg)     bgImg.removeAttribute('src');
+
+  const headerBlock = $('outHeaderBlock');
+  const footerBlock = $('outFooterBlock');
+  const bgWrap = $('outBgWrap');
+  if (headerBlock) { headerBlock.classList.remove('show'); headerBlock.style.height = '0px'; }
+  if (footerBlock) { footerBlock.classList.remove('show'); footerBlock.style.height = '0px'; }
+  if (bgWrap)      { bgWrap.classList.remove('has-img'); }
+
+  /* ★ 重新填充表单 + 应用设置 */
   fillReceiptSettingsForm();
   applyReceiptSettings();
   updateReceiptImageActiveState();
+
   if ($('receiptLayout') && $('receiptLayout').classList.contains('settings-open')) {
     setTimeout(() => setupReceiptImgDrag(), 100);
   }
@@ -16522,6 +16644,26 @@ const ANNOUNCEMENTS = {
       <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
     `,
   },
+  '1.1.1': {
+    title: '模板预设与批量管理',
+    html: `
+      <p>本次BUG修复：</p>
+      <ul style="padding-left:20px;line-height:1.85;">
+        <li><strong>价目表模板切换</strong>：点顶部「模板」按钮即可换模板，切换后样式自动重置为模板最初的样子。</li>
+        <li><strong>价目表位置自由调整</strong>：「基础样式」旁的「位置」按钮，可拖动 / 缩放 / 旋转正文区、署名、表尾说明，调好后自动保存。</li>
+        <li><strong>价目表预设完整保存</strong>：存储预设时会记住字体、字号、颜色、图片位置等全部外观，加载后完整还原。同名预设会直接覆盖。</li>
+        <li><strong>价目表实时同步</strong>：修改署名、表尾说明、颜色等设置时，右侧预览立刻更新。</li>
+        <li><strong>订单搜索</strong>：待办 / 已结 / 已撤 / 已废四个页面顶部都有搜索框，可按单主 ID、企划、角色、标签等快速筛选。</li>
+        <li><strong>订单批量管理</strong>：右上角「管理」按钮进入多选模式，支持全选、批量删除。</li>
+        <li><strong>标签按钮常显</strong>：订单详情页不用点「编辑」也能加标签。</li>
+        <li><strong>标签防误操作</strong>：输入标签后忘记点「添加」就保存时，会弹窗提醒是否一起保存。</li>
+        <li><strong>小票线条颜色可调</strong>：小票设置 → 样式里新增「线条颜色」，分割线、表格线、外框都能自定义。</li>
+        <li><strong>小票票尾清空生效</strong>：清空票尾文本后，小票上真的不再显示默认话术。</li>
+        <li><strong>新主题「朱汐沧澜」</strong>：朱红 + 沧蓝的跳跃色块风格，在「工具箱 → 主题风格」里切换。</li>
+      </ul>
+      <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
+    `,
+  },
 };
 
 
@@ -17411,6 +17553,20 @@ function openToolbox() {
                 <div class="tb-item-sub">QQ 群 / 邮箱</div>
               </div>
             </div>
+                        <div class="tb-item" onclick="openCopyrightNotice()">
+              <div class="tb-item-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="9"/>
+                  <path d="M14.5 9 a2.5 2.5 0 1 0 0 6"/>
+                  <circle cx="12" cy="12" r="0.5" fill="currentColor"/>
+                </svg>
+              </div>
+              <div class="tb-item-text">
+                <div class="tb-item-title">版权与免责声明</div>
+                <div class="tb-item-sub">字体 / 素材 / 数据 / 免责</div>
+              </div>
+            </div>
           </div>
           <div class="actions" style="justify-content:flex-end;margin-top:18px;">
             <button class="action-btn" onclick="closeModal()">关闭</button>
@@ -17523,7 +17679,92 @@ function copyContactValue(v) {
     fallbackCopy(v);
   }
 }
+/* ══════════ 版权与免责声明 ══════════ */
 
+function openCopyrightNotice() {
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:640px;">
+        <div class="modal-head">
+          <h3>版权与免责声明</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="copyright-content">
+
+            <h4>一、字体</h4>
+
+            <h5>1. 本站内置字体</h5>
+            <p>本站内置以下免费可商用字体，特此声明：</p>
+            <ul>
+              <li><strong>演示悠然小楷</strong> —— 免费商用授权，来源：cn-fontsource</li>
+              <li><strong>Playball</strong> —— SIL Open Font License 1.1</li>
+              <li><strong>Alex Brush</strong> —— SIL Open Font License 1.1</li>
+              <li><strong>思源黑体 / 思源宋体</strong> —— SIL Open Font License 1.1，来源：Adobe / Google</li>
+            </ul>
+            <p>上述字体均允许免费商用、修改与再分发（不得单独出售字体本身），本站已依协议保留原有版权声明与许可信息。</p>
+
+            <h5>2. 用户导入的字体</h5>
+            <p>用户通过「导入本地字体」功能上传的字体文件，其版权及使用授权由用户自行负责。</p>
+            <p>本站不具备审核能力，亦无法查看用户上传的字体内容，不验证其版权来源、不进行分发、不用于任何其他用途。</p>
+            <p>用户应确保其上传的字体已获得合法授权，并仅在授权范围内使用。如因用户上传的字体引发任何版权纠纷或法律责任，由用户自行承担，与本站无关。</p>
+            <p>字体文件的存储方式与有效期以本站当前功能实现为准；本站保留对存储方式进行调整的权利，具体以页面实际说明为准。</p>
+
+            <h4>二、用户内容</h4>
+
+            <h5>1. 本站原创素材声明</h5>
+            <p>本站提供的模板底图、界面装饰素材等均为原创，用户可在本站范围内免费使用（含商业用途）。</p>
+            <p>但<strong>不可二次传播</strong>，<strong>不可脱离本站使用</strong>，包括但不限于：单独下载、转发、复制到其他项目、在其他平台发布或以任何形式提供给第三方。</p>
+
+            <h5>2. 用户上传的图片</h5>
+            <p>用户通过「预览图」「票头 / 票尾 / 背景图」「素材 / 要求图片」等功能上传的所有图片，其版权及使用授权由用户自行负责。</p>
+            <p>本站不具备审核能力，亦无法查看用户上传的图片内容，不验证其版权来源、不对外传播、不用于任何其他用途。</p>
+            <p>用户应确保其上传的图片已获得合法授权。如因用户上传的图片引发任何版权纠纷或法律责任，由用户自行承担，与本站无关。</p>
+
+            <h5>3. 用户生成的内容</h5>
+            <p>用户通过本站生成的小票、价目表等图文内容，均由用户自行创作或组织，相关权利归用户所有。</p>
+            <p>本站不对用户生成内容主张任何权利，亦不对其合规性、准确性、完整性负责。</p>
+
+            <h4>三、网站本身</h4>
+
+            <h5>A. 版权与使用限制</h5>
+            <p>本站的代码、界面设计、原创素材（含模板底图）等，版权均归本站所有。</p>
+            <p><strong>禁止抄袭、复制、二次分发</strong>；<strong>禁止以任何形式转载、传播或用于其他项目</strong>。</p>
+            <p><strong>即使用户通过他人分享获得本站链接，也禁止对外转发</strong>。本站链接仅限指定范围内使用，不得公开传播或以任何形式扩散。</p>
+            <p>如需引用、合作或取得授权，请联系本站。</p>
+
+            <h5>B. 数据存储与隐私</h5>
+            <p>本站的数据存储方式以当前功能实现为准。当前版本中，用户数据（订单、单主、小票、图片等）默认保存在用户自己的浏览器中，本站不主动收集、不查看用户信息。</p>
+            <p>若本站未来上线云端同步等需要服务端支持的功能，将另行以显著方式告知用户，并遵循相关法律法规处理用户数据。用户有权选择是否使用此类功能。</p>
+            <p>无论采用何种存储方式，用户均应妥善保管自己的数据。建议定期通过「工具箱 → 手动同步 → 导出数据」备份重要数据。</p>
+
+            <h5>C. 免责总则</h5>
+            <p>用户使用本站所产生的任何直接或间接后果，由用户自行承担。</p>
+            <p>本站不对以下情形负责，包括但不限于：数据丢失、设备故障、浏览器异常、误操作、网络中断、第三方服务中断等。</p>
+            <p>本站保留在不预先通知的情况下，对功能、界面、服务内容进行调整、暂停或终止的权利。</p>
+
+            <h5>D. 第三方工具与服务</h5>
+            <p>本站使用了以下开源工具与第三方服务：</p>
+            <ul>
+              <li><strong>html2canvas</strong> —— MIT 许可，用于图片导出</li>
+              <li><strong>51.LA 统计</strong> —— 用于网站访问统计</li>
+              <li><strong>演示悠然小楷、Playball、Alex Brush</strong> —— 通过 CDN 在线加载</li>
+            </ul>
+            <p>上述第三方工具与服务的使用遵循其各自的授权条款，本站不对其可用性、稳定性或安全性作出承诺。</p>
+
+            <h5>E. 条款变更</h5>
+            <p>本站保留随时更新本版权声明与免责条款的权利。</p>
+            <p>更新后的条款将在本页面公布，并自公布之日起生效。用户继续使用本站，即视为接受更新后的条款。</p>
+
+          </div>
+
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn" onclick="closeModal()">关闭</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
 /* ╔══════════════════════════════════════════════════════╗
    ║  第 17 段 · 价目表                                    ║
    ║                                                      ║
@@ -18922,11 +19163,18 @@ function openPlTemplatePicker() {
 
 /* ★ 点击某个模板：切换并保存 */
 function pickPlTemplate(id) {
-  const s = getPriceListSettings();
-  s.templateId = id;
-  setPriceListSettings(s);
+  /* ★ 清掉该模板的自定义位置 → 回到模板原始布局 */
+  clearPlCustomLayout(id);
+
+  /* ★ 重置所有样式设置，只保留新的 templateId */
+  const fresh = makeDefaultPriceListSettings();
+  fresh.templateId = id;
+
+  /* ★ 保留流程/须知/内容，不动数据 */
+  setPriceListSettings(fresh);
+
   closeModal();
-  renderPriceListStyleForm(s);
+  renderPriceListStyleForm(fresh);
   renderPriceListPreview();
 }
 
@@ -19813,20 +20061,48 @@ function savePriceListPreset() {
 function confirmSavePriceListPreset(defaultName) {
   const name = ($('plPresetName') && $('plPresetName').value.trim()) || defaultName;
   const list = getPriceListPresets();
-  if (list.length >= PRICE_LIST_MAX_PRESETS) { closeModal(); return; }
 
-  list.push({
-    id: makePriceListPresetId(),
+  /* 判断是否重名 */
+  const existingIdx = list.findIndex(p => p.name === name);
+  const isOverwrite = existingIdx >= 0;
+
+  if (!isOverwrite && list.length >= PRICE_LIST_MAX_PRESETS) {
+    closeModal();
+    showSimpleAlert(
+      '无法新增',
+      '最多只能保存 ' + PRICE_LIST_MAX_PRESETS + ' 个价目表预设。<br>' +
+      '请先在「加载」里删掉一个，或者用已有预设的名字覆盖。'
+    );
+    return;
+  }
+
+  /* ★ 关键：把"当前模板的自定义位置"也一起存 */
+  const settings = JSON.parse(JSON.stringify(getPriceListSettings()));
+  const customLayout = getPlCustomLayout(settings.templateId);
+
+  const preset = {
+    id: isOverwrite ? list[existingIdx].id : makePriceListPresetId(),
     name: name,
     createdAt: Date.now(),
     data: JSON.parse(JSON.stringify(getPriceList())),
-    settings: JSON.parse(JSON.stringify(getPriceListSettings())),
-    global: JSON.parse(JSON.stringify(getPriceListGlobal()))
-  });
+    settings: settings,
+    global: JSON.parse(JSON.stringify(getPriceListGlobal())),
+    customLayout: customLayout ? JSON.parse(JSON.stringify(customLayout)) : null,
+  };
+
+  if (isOverwrite) {
+    list[existingIdx] = preset;
+  } else {
+    list.push(preset);
+  }
 
   if (!setPriceListPresets(list)) return;
+
   closeModal();
-  showSimpleAlert('已保存', '预设「' + escapeHtml(name) + '」已保存。');
+  showSimpleAlert(
+    isOverwrite ? '已覆盖' : '已保存',
+    '预设「' + escapeHtml(name) + '」' + (isOverwrite ? '已覆盖同名预设。' : '已保存。')
+  );
 }
 
 function openPriceListPresetPicker() {
@@ -19891,12 +20167,21 @@ function applyPriceListPresetByIndex(i) {
   const preset = list[i];
   if (!preset) return;
 
+  /* 写入内容 / 流程须知 / 样式 */
   if (preset.data)   setPriceList(JSON.parse(JSON.stringify(preset.data)));
   if (preset.global) setPriceListGlobal(JSON.parse(JSON.stringify(preset.global)));
 
   const s = Object.assign(makeDefaultPriceListSettings(), preset.settings || {});
   s.followTheme = false;
   setPriceListSettings(s);
+
+  /* ★ 关键：恢复该模板的自定义位置 */
+  if (preset.customLayout) {
+    setPlCustomLayout(s.templateId, JSON.parse(JSON.stringify(preset.customLayout)));
+  } else {
+    /* 没存位置 → 清掉该模板的自定义位置（回默认） */
+    clearPlCustomLayout(s.templateId);
+  }
 
   closeModal();
   showSimpleAlert('已加载', '预设「' + escapeHtml(preset.name || '') + '」已套用。');
