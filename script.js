@@ -2044,6 +2044,7 @@ const DEFAULT_RECEIPT_SETTINGS = {
   fontSize: 13.5,
   colorPrimary: '#111111',
   colorSecondary: '#555555',
+  lineColor: '#b8c2cc',
 };
 
 /* 字体下拉里每个选项 → 实际 font-family 字符串 */
@@ -2086,11 +2087,11 @@ function getReceiptSettings() {
     merged.font = stored.fontCN || stored.fontEN || 'system';
   }
 
-  /* 票尾文本：空值填默认 */
-  if (!merged.footer1 || String(merged.footer1).trim() === '') {
+  /* 票尾文本：只有 undefined / null 才填默认（用户主动清空后不覆盖） */
+  if (merged.footer1 === undefined || merged.footer1 === null) {
     merged.footer1 = DEFAULT_RECEIPT_SETTINGS.footer1;
   }
-  if (!merged.footer2 || String(merged.footer2).trim() === '') {
+  if (merged.footer2 === undefined || merged.footer2 === null) {
     merged.footer2 = DEFAULT_RECEIPT_SETTINGS.footer2;
   }
 
@@ -2219,6 +2220,7 @@ function applyReceiptSettings() {
   if ($('rsBgColor'))        s.bgColor        = $('rsBgColor').value;
   if ($('rsColorPrimary'))   s.colorPrimary   = $('rsColorPrimary').value;
   if ($('rsColorSecondary')) s.colorSecondary = $('rsColorSecondary').value;
+  if ($('rsLineColor'))      s.lineColor      = $('rsLineColor').value;
   if ($('rsBgOpacity'))      s.bgOpacity      = parseFloat($('rsBgOpacity').value);
   if ($('rsFont'))           s.font           = $('rsFont').value;
   if ($('rsFontSize')) {
@@ -2242,17 +2244,14 @@ function applyReceiptSettings() {
   receipt.style.setProperty('--rc-ink', s.colorPrimary || '#111111');
   receipt.style.setProperty('--rc-ink-soft', s.colorSecondary || '#555555');
   receipt.style.setProperty('--rc-font-size', (s.fontSize || DEFAULT_FONT_SIZE) + 'px');
+  receipt.style.setProperty('--rc-line', s.lineColor || '#b8c2cc');
   receipt.style.background = s.bgColor || '#ffffff';
 
-  /* 票尾两行文字：空值 → 显示默认值 */
+  /* 票尾两行文字：直接用当前值，空就是空 */
   const l1 = $('outFooterLine1');
   const l2 = $('outFooterLine2');
-  if (l1) {
-    l1.textContent = (s.footer1 && s.footer1.trim()) ? s.footer1 : DEFAULT_RECEIPT_SETTINGS.footer1;
-  }
-  if (l2) {
-    l2.textContent = (s.footer2 && s.footer2.trim()) ? s.footer2 : DEFAULT_RECEIPT_SETTINGS.footer2;
-  }
+  if (l1) l1.textContent = s.footer1 || '';
+  if (l2) l2.textContent = s.footer2 || '';
 
   /* 三张图 */
   applyBgImgRef(s.bgImg, s.bgImgState, s.bgOpacity);
@@ -2715,8 +2714,8 @@ function fillReceiptSettingsForm() {
 
   if ($('rsColorPrimary'))   $('rsColorPrimary').value = s.colorPrimary || '#111111';
   if ($('rsColorPrimaryHex')) $('rsColorPrimaryHex').value = s.colorPrimary || '#111111';
-  if ($('rsColorSecondary')) $('rsColorSecondary').value = s.colorSecondary || '#555555';
-  if ($('rsColorSecondaryHex')) $('rsColorSecondaryHex').value = s.colorSecondary || '#555555';
+  if ($('rsLineColor'))    $('rsLineColor').value    = s.lineColor || '#b8c2cc';
+  if ($('rsLineColorHex')) $('rsLineColorHex').value = s.lineColor || '#b8c2cc';
 
   if ($('rsFontSize')) {
     const fs = (typeof s.fontSize === 'number' && isFinite(s.fontSize)) ? s.fontSize : DEFAULT_FONT_SIZE;
@@ -2737,7 +2736,7 @@ function fillReceiptSettingsForm() {
   }
 
   /* 色卡的高亮 */
-  ['rsBgColor', 'rsColorPrimary', 'rsColorSecondary'].forEach(id => {
+  ['rsBgColor', 'rsColorPrimary', 'rsColorSecondary', 'rsLineColor'].forEach(id => {
     const el = $(id);
     if (el) updateSwatchActive(id, el.value);
   });
@@ -2984,6 +2983,7 @@ function onColorChanged(which) {
     bgColor:        ['rsBgColor',        'rsBgColorHex'],
     colorPrimary:   ['rsColorPrimary',   'rsColorPrimaryHex'],
     colorSecondary: ['rsColorSecondary', 'rsColorSecondaryHex'],
+    lineColor:      ['rsLineColor',      'rsLineColorHex'],
   };
   const [pickerId, hexId] = map[which] || [];
   if (pickerId && hexId && $(pickerId) && $(hexId)) {
@@ -4368,29 +4368,106 @@ function renderTodoList() {
   const box = $('todoListContainer');
   if (!box) return;
 
-  const todos = getSortedTodos();
+  let todos = getSortedTodos();
 
-  /* 空态 */
+  /* ★ 搜索过滤 */
+  const q = ($('todoSearch') ? $('todoSearch').value : '').trim().toLowerCase();
+  if (q) todos = todos.filter(t => orderMatchesSearch(t, q));
+
   if (!todos.length) {
     box.innerHTML = `
       <div class="todo-empty">
         <div class="todo-empty-icon">📋</div>
-        <div>暂无订单<br><span style="font-size:12px;opacity:0.7;">在小票页生成订单后，点工具栏第一个图标导入订单</span></div>
+        <div>${q ? '没有匹配的订单' : '暂无订单<br><span style="font-size:12px;opacity:0.7;">在小票页生成订单后，点工具栏第一个图标导入订单</span>'}</div>
       </div>`;
+    updateOrderManageBar('todo');
     return;
   }
 
   box.innerHTML = todos.map(t => renderTodoCard(t)).join('');
+  updateOrderManageBar('todo');
 }
 
 /* 渲染单张订单卡片 */
+function renderCompletedList() {
+  const box = $('completedListContainer');
+  if (!box) return;
+
+  const st = ORDER_LIST_STATE.completed;
+  const range = getOrderRange('completed');
+  let list = getCompleted().filter(c => isInOrderRange(c.completedDate, range.start, range.end));
+
+  /* ★ 搜索过滤 */
+  const q = ($('completedSearch') ? $('completedSearch').value : '').trim().toLowerCase();
+  if (q) list = list.filter(c => orderMatchesSearch(c, q));
+
+  const hint = $('completedRangeHint');
+  if (hint) hint.textContent = '统计范围：' + range.label + '（' + range.start + ' 至 ' + range.end + '）';
+
+  if (!list.length) {
+    box.innerHTML = `
+      <div class="completed-empty">
+        <div class="completed-empty-icon">✓</div>
+        <div>${q ? '没有匹配的记录' : '该范围内暂无已结单'}</div>
+      </div>`;
+    updateOrderManageBar('completed');
+    return;
+  }
+
+  const sorted = list.slice().sort((a, b) => {
+    const da = a.completedDate || '';
+    const db = b.completedDate || '';
+    if (da !== db) return st.sort === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
+    return st.sort === 'asc'
+      ? (a.createdAt || 0) - (b.createdAt || 0)
+      : (b.createdAt || 0) - (a.createdAt || 0);
+  });
+
+  const mgr = __orderManageState.completed;
+
+  box.innerHTML = `<div class="completed-list">` + sorted.map(c => {
+    const contactFull = formatContactFull(c.contactType, c.contact);
+    const id = escapeAttr(c.id);
+    const isSelected = !!mgr.selected[c.id];
+    const manageCls = isSelected ? ' is-selected' : '';
+    const circleHtml = mgr.active
+      ? `<div class="order-select-circle" onclick="event.stopPropagation();toggleOrderSelect('completed','${id}')" title="选择">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+             <circle cx="12" cy="12" r="10"/>
+             ${isSelected ? '<polyline points="8 12 11 15 16 9"/>' : ''}
+           </svg>
+         </div>`
+      : '';
+    return `
+    <div class="completed-card${manageCls}" onclick="onCompletedCardClick('${id}')">
+      ${circleHtml}
+      <div class="completed-card-body">
+        <div class="completed-card-title">${escapeHtml(c.clientName || '未命名')}</div>
+        ${renderTodoCardTags(c.tags)}
+        <div class="completed-card-meta">
+          <span class="meta-item">ID：<strong>${escapeHtml(c.clientId || '—')}</strong></span>
+          <span class="meta-item">联系：<strong>${escapeHtml(contactFull || '—')}</strong></span>
+          <span class="meta-item">完成：<strong>${escapeHtml(c.completedDate || '—')}</strong></span>
+        </div>
+      </div>
+      <div class="completed-card-amount">${fmt(c.totalReceived || 0)}</div>
+      ${mgr.active ? '' : `<button class="completed-card-del" onclick="event.stopPropagation();askDeleteCompleted('${id}')" title="删除">×</button>`}
+    </div>`;
+  }).join('') + `</div>`;
+
+  updateOrderManageBar('completed');
+}
+
 function renderTodoCard(t) {
   const id = escapeAttr(t.id);
   const isPlaceholder = !!t.isPlaceholder;
   const isPending = isTodoPending(t);
   const titleHtml = escapeHtml(formatTodoTitle(t));
 
-  /* 三横线图标 */
+  const st = __orderManageState.todo;
+  const isSelected = !!st.selected[t.id];
+  const manageCls = isSelected ? ' is-selected' : '';
+
   const moreSvg = `
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -4399,11 +4476,22 @@ function renderTodoCard(t) {
       <line x1="4" y1="17" x2="20" y2="17"/>
     </svg>`;
 
-  /* --- 待结状态：单独一种样式 --- */
+  const circleHtml = st.active
+    ? `<div class="order-select-circle" onclick="event.stopPropagation();toggleOrderSelect('todo','${id}')" title="选择">
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+           <circle cx="12" cy="12" r="10"/>
+           ${isSelected ? '<polyline points="8 12 11 15 16 9"/>' : ''}
+         </svg>
+       </div>`
+    : '';
+
+  const bodyOnclick = `onclick="onTodoCardClick('${id}')"`;
+
   if (isPending) {
     const pendingAmt = Number(t.pendingAmount) || 0;
-    return `<div class="todo-card is-pending">
-      <div class="todo-card-body" onclick="openTodoDetail('${id}')">
+    return `<div class="todo-card is-pending${manageCls}">
+      ${circleHtml}
+      <div class="todo-card-body" ${bodyOnclick}>
         <div class="todo-card-title">${titleHtml}</div>
         ${renderTodoCardTags(t.tags)}
         <div class="todo-card-pending-row">
@@ -4411,12 +4499,11 @@ function renderTodoCard(t) {
           <span class="todo-card-pending-amount">${fmt(pendingAmt)}</span>
         </div>
       </div>
-      <button class="todo-more-btn" onclick="openTodoMoreMenu(event, '${id}')" title="更多">${moreSvg}</button>
-      <button class="todo-settle-btn" onclick="settleTodo('${id}')">结单</button>
+      ${st.active ? '' : `<button class="todo-more-btn" onclick="openTodoMoreMenu(event, '${id}')" title="更多">${moreSvg}</button>`}
+      ${st.active ? '' : `<button class="todo-settle-btn" onclick="settleTodo('${id}')">结单</button>`}
     </div>`;
   }
 
-  /* --- 普通状态 --- */
   const total = (t.items || []).length;
   const done  = (t.items || []).filter(x => x.done).length;
 
@@ -4431,8 +4518,9 @@ function renderTodoCard(t) {
 
   const daysHtml = formatDaysLeftHtml(t.deadline, isPlaceholder);
 
-  return `<div class="todo-card">
-    <div class="todo-card-body" onclick="openTodoDetail('${id}')">
+  return `<div class="todo-card${manageCls}">
+    ${circleHtml}
+    <div class="todo-card-body" ${bodyOnclick}>
       <div class="todo-card-title">${titleHtml}</div>
       ${renderTodoCardTags(t.tags)}
       <div class="todo-card-meta">
@@ -4440,8 +4528,8 @@ function renderTodoCard(t) {
         <span class="todo-card-deadline">${daysHtml}</span>
       </div>
     </div>
-    <button class="todo-more-btn" onclick="openTodoMoreMenu(event, '${id}')" title="更多">${moreSvg}</button>
-    <button class="todo-card-delete" onclick="askDeleteTodo('${id}')" title="删除">×</button>
+    ${st.active ? '' : `<button class="todo-more-btn" onclick="openTodoMoreMenu(event, '${id}')" title="更多">${moreSvg}</button>`}
+    ${st.active ? '' : `<button class="todo-card-delete" onclick="askDeleteTodo('${id}')" title="删除">×</button>`}
   </div>`;
 }
 
@@ -7622,7 +7710,10 @@ function renderCancelledList() {
 
   const st = ORDER_LIST_STATE.cancelled;
   const range = getOrderRange('cancelled');
-  const list = getCancelled().filter(c => isInOrderRange(c.cancelledDate, range.start, range.end));
+  let list = getCancelled().filter(c => isInOrderRange(c.cancelledDate, range.start, range.end));
+
+  const q = ($('cancelledSearch') ? $('cancelledSearch').value : '').trim().toLowerCase();
+  if (q) list = list.filter(c => orderMatchesSearch(c, q));
 
   const hint = $('cancelledRangeHint');
   if (hint) hint.textContent = '统计范围：' + range.label + '（' + range.start + ' 至 ' + range.end + '）';
@@ -7631,8 +7722,9 @@ function renderCancelledList() {
     box.innerHTML = `
       <div class="completed-empty">
         <div class="completed-empty-icon">✕</div>
-        <div>该范围内暂无撤单记录</div>
+        <div>${q ? '没有匹配的记录' : '该范围内暂无撤单记录'}</div>
       </div>`;
+    updateOrderManageBar('cancelled');
     return;
   }
 
@@ -7645,6 +7737,8 @@ function renderCancelledList() {
       : (b.createdAt || 0) - (a.createdAt || 0);
   });
 
+  const mgr = __orderManageState.cancelled;
+
   box.innerHTML = `<div class="cancelled-list">` + sorted.map(c => {
     let sideText = '';
     let sideClass = '';
@@ -7653,9 +7747,21 @@ function renderCancelledList() {
     else { sideText = '无'; sideClass = ' is-empty'; }
 
     const contactFull = formatContactFull(c.contactType, c.contact);
+    const id = escapeAttr(c.id);
+    const isSelected = !!mgr.selected[c.id];
+    const manageCls = isSelected ? ' is-selected' : '';
+    const circleHtml = mgr.active
+      ? `<div class="order-select-circle" onclick="event.stopPropagation();toggleOrderSelect('cancelled','${id}')" title="选择">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+             <circle cx="12" cy="12" r="10"/>
+             ${isSelected ? '<polyline points="8 12 11 15 16 9"/>' : ''}
+           </svg>
+         </div>`
+      : '';
 
     return `
-    <div class="cancelled-card" onclick="openCancelledDetail('${escapeAttr(c.id)}')">
+    <div class="cancelled-card${manageCls}" onclick="onCancelledCardClick('${id}')">
+      ${circleHtml}
       <div class="cancelled-card-body">
         <div class="cancelled-card-title">${escapeHtml(c.clientName || '未命名')}</div>
         ${renderTodoCardTags(c.tags)}
@@ -7668,6 +7774,8 @@ function renderCancelledList() {
       <div class="cancelled-card-side${sideClass}">${escapeHtml(sideText)}</div>
     </div>`;
   }).join('') + `</div>`;
+
+  updateOrderManageBar('cancelled');
 }
 
 /* ---- 废 页面 ---- */
@@ -7677,7 +7785,10 @@ function renderDiscardedList() {
 
   const st = ORDER_LIST_STATE.discarded;
   const range = getOrderRange('discarded');
-  const list = getDiscarded().filter(c => isInOrderRange(c.discardedDate, range.start, range.end));
+  let list = getDiscarded().filter(c => isInOrderRange(c.discardedDate, range.start, range.end));
+
+  const q = ($('discardedSearch') ? $('discardedSearch').value : '').trim().toLowerCase();
+  if (q) list = list.filter(c => orderMatchesSearch(c, q));
 
   const hint = $('discardedRangeHint');
   if (hint) hint.textContent = '统计范围：' + range.label + '（' + range.start + ' 至 ' + range.end + '）';
@@ -7686,8 +7797,9 @@ function renderDiscardedList() {
     box.innerHTML = `
       <div class="completed-empty">
         <div class="completed-empty-icon">⌫</div>
-        <div>该范围内暂无废稿记录</div>
+        <div>${q ? '没有匹配的记录' : '该范围内暂无废稿记录'}</div>
       </div>`;
+    updateOrderManageBar('discarded');
     return;
   }
 
@@ -7700,6 +7812,8 @@ function renderDiscardedList() {
       : (b.createdAt || 0) - (a.createdAt || 0);
   });
 
+  const mgr = __orderManageState.discarded;
+
   box.innerHTML = `<div class="discarded-list">` + sorted.map(c => {
     let sideText = '';
     let sideClass = '';
@@ -7708,9 +7822,21 @@ function renderDiscardedList() {
     else { sideText = '未收取'; sideClass = ' is-empty'; }
 
     const contactFull = formatContactFull(c.contactType, c.contact);
+    const id = escapeAttr(c.id);
+    const isSelected = !!mgr.selected[c.id];
+    const manageCls = isSelected ? ' is-selected' : '';
+    const circleHtml = mgr.active
+      ? `<div class="order-select-circle" onclick="event.stopPropagation();toggleOrderSelect('discarded','${id}')" title="选择">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+             <circle cx="12" cy="12" r="10"/>
+             ${isSelected ? '<polyline points="8 12 11 15 16 9"/>' : ''}
+           </svg>
+         </div>`
+      : '';
 
     return `
-    <div class="discarded-card" onclick="openDiscardedDetail('${escapeAttr(c.id)}')">
+    <div class="discarded-card${manageCls}" onclick="onDiscardedCardClick('${id}')">
+      ${circleHtml}
       <div class="discarded-card-body">
         <div class="discarded-card-title">${escapeHtml(c.clientName || '未命名')}</div>
         ${renderTodoCardTags(c.tags)}
@@ -7723,6 +7849,8 @@ function renderDiscardedList() {
       <div class="discarded-card-side${sideClass}">${escapeHtml(sideText)}</div>
     </div>`;
   }).join('') + `</div>`;
+
+  updateOrderManageBar('discarded');
 }
 
 
@@ -9019,6 +9147,236 @@ var __masterEditMode = false;
 var __masterFilter = null;
 var __masterManageMode = false;
 var __masterSelectedKeys = {};
+
+/* ★ 订单批量管理状态 */
+var __orderManageState = {
+  todo:      { active: false, selected: {} },
+  completed: { active: false, selected: {} },
+  cancelled: { active: false, selected: {} },
+  discarded: { active: false, selected: {} },
+};
+
+/* ══════════ 订单批量管理 ══════════ */
+
+function renderOrderListForPage(prefix) {
+  if (prefix === 'todo')      return renderTodoList();
+  if (prefix === 'completed') return renderCompletedList();
+  if (prefix === 'cancelled') return renderCancelledList();
+  if (prefix === 'discarded') return renderDiscardedList();
+}
+
+function toggleOrderManageMode(prefix) {
+  const st = __orderManageState[prefix];
+  if (!st) return;
+  st.active = !st.active;
+  st.selected = {};
+
+  const btn = $(prefix + 'ManageBtn');
+  if (btn) btn.textContent = st.active ? '退出' : '管理';
+
+  const bar = $(prefix + 'ManageBar');
+  if (bar) bar.style.display = st.active ? 'flex' : 'none';
+
+  updateOrderManageBar(prefix);
+  renderOrderListForPage(prefix);
+}
+
+function exitOrderManageMode(prefix) {
+  const st = __orderManageState[prefix];
+  if (!st) return;
+  st.active = false;
+  st.selected = {};
+
+  const btn = $(prefix + 'ManageBtn');
+  if (btn) btn.textContent = '管理';
+
+  const bar = $(prefix + 'ManageBar');
+  if (bar) bar.style.display = 'none';
+
+  renderOrderListForPage(prefix);
+}
+
+function toggleOrderSelect(prefix, key) {
+  const st = __orderManageState[prefix];
+  if (!st || !st.active) return;
+  if (st.selected[key]) delete st.selected[key];
+  else                  st.selected[key] = true;
+  renderOrderListForPage(prefix);
+}
+
+function toggleAllOrderSelect(prefix) {
+  const st = __orderManageState[prefix];
+  if (!st) return;
+  const keys = getFilteredOrderKeys(prefix);
+  const allSelected = keys.length > 0 && keys.every(k => st.selected[k]);
+  if (allSelected) keys.forEach(k => { delete st.selected[k]; });
+  else             keys.forEach(k => { st.selected[k] = true; });
+  renderOrderListForPage(prefix);
+}
+
+function updateOrderManageBar(prefix) {
+  const st = __orderManageState[prefix];
+  if (!st) return;
+
+  const countEl = $(prefix + 'SelectedCount');
+  const delBtn  = $(prefix + 'BatchDeleteBtn');
+  const selAllBtn = $(prefix + 'SelectAllBtn');
+
+  const selCount = Object.keys(st.selected).length;
+  if (countEl) countEl.textContent = '已选择 ' + selCount + ' 项';
+  if (delBtn)  delBtn.disabled = selCount === 0;
+
+  if (selAllBtn) {
+    const keys = getFilteredOrderKeys(prefix);
+    if (keys.length === 0) selAllBtn.textContent = '全选';
+    else {
+      const allSel = keys.every(k => st.selected[k]);
+      selAllBtn.textContent = allSel ? '取消全选' : '全选';
+    }
+  }
+}
+
+function getFilteredOrderKeys(prefix) {
+  if (prefix === 'todo') {
+    const q = ($('todoSearch') ? $('todoSearch').value : '').trim().toLowerCase();
+    return getSortedTodos()
+      .filter(t => !q || orderMatchesSearch(t, q))
+      .map(t => t.id);
+  }
+
+  if (prefix === 'completed') {
+    const q = ($('completedSearch') ? $('completedSearch').value : '').trim().toLowerCase();
+    const range = getOrderRange('completed');
+    return getCompleted()
+      .filter(c => isInOrderRange(c.completedDate, range.start, range.end))
+      .filter(c => !q || orderMatchesSearch(c, q))
+      .map(c => c.id);
+  }
+
+  if (prefix === 'cancelled') {
+    const q = ($('cancelledSearch') ? $('cancelledSearch').value : '').trim().toLowerCase();
+    const range = getOrderRange('cancelled');
+    return getCancelled()
+      .filter(c => isInOrderRange(c.cancelledDate, range.start, range.end))
+      .filter(c => !q || orderMatchesSearch(c, q))
+      .map(c => c.id);
+  }
+
+  if (prefix === 'discarded') {
+    const q = ($('discardedSearch') ? $('discardedSearch').value : '').trim().toLowerCase();
+    const range = getOrderRange('discarded');
+    return getDiscarded()
+      .filter(c => isInOrderRange(c.discardedDate, range.start, range.end))
+      .filter(c => !q || orderMatchesSearch(c, q))
+      .map(c => c.id);
+  }
+
+  return [];
+}
+
+/* 订单搜索匹配：单主 / 联系方式 / 企划 / 角色 / 标签 */
+function orderMatchesSearch(item, q) {
+  if (!item) return false;
+  const parts = [
+    item.clientId   || '',
+    item.clientName || '',
+    item.contact    || '',
+    item.note       || '',
+    item.platform   || '',
+  ];
+  if (Array.isArray(item.tags)) {
+    item.tags.forEach(t => { if (t && t.name) parts.push(t.name); });
+  }
+  if (item.receiptSnapshot && typeof item.receiptSnapshot === 'object') {
+    const s = item.receiptSnapshot;
+    if (s.project)   parts.push(s.project);
+    if (s.attribute) parts.push(s.attribute);
+    if (s.character) parts.push(s.character);
+    (s.groups || []).forEach(g => {
+      (g.items || []).forEach(it => { if (it && it.name) parts.push(it.name); });
+    });
+  }
+  return parts.join(' ').toLowerCase().indexOf(q) > -1;
+}
+
+/* 卡片点击：管理模式选/取消，正常打开详情 */
+function onTodoCardClick(id) {
+  if (__orderManageState.todo.active) toggleOrderSelect('todo', id);
+  else                                openTodoDetail(id);
+}
+function onCompletedCardClick(id) {
+  if (__orderManageState.completed.active) toggleOrderSelect('completed', id);
+  else                                     openCompletedDetail(id);
+}
+function onCancelledCardClick(id) {
+  if (__orderManageState.cancelled.active) toggleOrderSelect('cancelled', id);
+  else                                     openCancelledDetail(id);
+}
+function onDiscardedCardClick(id) {
+  if (__orderManageState.discarded.active) toggleOrderSelect('discarded', id);
+  else                                     openDiscardedDetail(id);
+}
+
+function confirmOrderBatchDelete(prefix) {
+  const st = __orderManageState[prefix];
+  if (!st) return;
+  const keys = Object.keys(st.selected);
+  if (!keys.length) { showSimpleAlert('提示', '请先勾选要删除的记录。'); return; }
+
+  const label = {
+    todo: '订单', completed: '结单记录',
+    cancelled: '撤单记录', discarded: '废稿记录'
+  }[prefix];
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>批量删除</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;">确定删除选中的 <strong>${keys.length}</strong> 条${label}吗？</p>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;line-height:1.7;">
+            ${prefix === 'todo' ? '删除订单会同时删除该订单相关流水。' : '只删除记录，相关流水不会被删除。'}<br>
+            此操作不可恢复。
+          </p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="doOrderBatchDelete('${prefix}')">确定删除</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function doOrderBatchDelete(prefix) {
+  const st = __orderManageState[prefix];
+  if (!st) return;
+  const keys = Object.keys(st.selected);
+  if (!keys.length) { closeModal(); return; }
+
+  if (prefix === 'todo') {
+    setTodos(getTodos().filter(t => !st.selected[t.id]));
+    keys.forEach(id => removeFlowsByTodoId(id));
+  } else if (prefix === 'completed') {
+    setCompleted(getCompleted().filter(c => !st.selected[c.id]));
+  } else if (prefix === 'cancelled') {
+    setCancelled(getCancelled().filter(c => !st.selected[c.id]));
+  } else if (prefix === 'discarded') {
+    setDiscarded(getDiscarded().filter(c => !st.selected[c.id]));
+  }
+
+  st.selected = {};
+  closeModal();
+  showSimpleAlert('已删除', '已删除 ' + keys.length + ' 条记录。');
+
+  renderOrderListForPage(prefix);
+  updateOrderManageBar(prefix);
+  if (typeof renderSchedule === 'function') renderSchedule();
+  if (typeof renderStatsPage === 'function') renderStatsPage();
+  if (typeof renderMasterList === 'function') renderMasterList();
+}
 
 /* 列表缓存（指纹法）：
    数据源没变就直接返回上次的结果，避免搜索框每打一个字都重建列表 */
@@ -14401,8 +14759,89 @@ function closeTagEditor() {
 function saveReceiptTags() {
   const state = window.__tagEditorState;
   if (!state) return;
+
+  /* ★ 检查输入框有没有未添加的文字 */
+  const input = $('tagEditorInput');
+  const pendingText = input ? String(input.value || '').trim() : '';
+
+  if (pendingText) {
+    showPendingReceiptTagConfirm(pendingText);
+    return;
+  }
+
+  doSaveReceiptTags();
+}
+
+function showPendingReceiptTagConfirm(pendingText) {
+  const state = window.__tagEditorState;
+  if (!state) return;
+
+  const already = state.selected.some(t => t.name === pendingText);
+  const isFull  = state.selected.length >= TAG_MAX_COUNT;
+
+  if (already || isFull) {
+    const msg = already
+      ? '输入框里的标签「' + escapeHtml(pendingText) + '」已经加过了。<br>要点「添加」才会生效，或者直接点「保存」忽略它。'
+      : '标签已达上限 ' + TAG_MAX_COUNT + ' 个，输入框里的「' + escapeHtml(pendingText) + '」无法再加。';
+
+    $('modalRoot').innerHTML = `
+      <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <h3>提示</h3>
+            <button class="icon-btn" onclick="closeModal()">×</button>
+          </div>
+          <div class="modal-body">
+            <p style="margin:8px 0;line-height:1.8;">${msg}</p>
+            <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+              <button class="action-btn ghost" onclick="closeModal();renderReceiptTagEditor();">返回编辑</button>
+              <button class="action-btn" onclick="closeModal();doSaveReceiptTags();">忽略并保存</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>有未添加的标签</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;line-height:1.8;">
+            输入框里的「<strong>${escapeHtml(pendingText)}</strong>」还没有点「添加」。<br>
+            要一起保存吗？
+          </p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+            <button class="action-btn ghost" onclick="closeModal();renderReceiptTagEditor();">取消</button>
+            <button class="action-btn ghost" style="border-color:var(--red);color:var(--red);" onclick="closeModal();doSaveReceiptTags();">丢弃并保存</button>
+            <button class="action-btn" onclick="addPendingReceiptTagAndSave('${escapeAttr(pendingText)}');">添加并保存</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function addPendingReceiptTagAndSave(text) {
+  const state = window.__tagEditorState;
+  if (!state) return;
+
+  text = String(text || '').trim();
+
+  if (text && state.selected.length < TAG_MAX_COUNT && !state.selected.some(t => t.name === text)) {
+    state.selected.push({ name: text, color: state.inputColor || 'red' });
+  }
+
+  doSaveReceiptTags();
+}
+
+function doSaveReceiptTags() {
+  const state = window.__tagEditorState;
+  if (!state) return;
   window.__receiptTags = (state.selected || []).slice();
-  /* 存入历史库（同名不重复） */
   window.__receiptTags.forEach(t => addTagToLibrary(t.name, t.color));
   updateReceiptTagBtn();
   closeTagEditor();
@@ -14445,12 +14884,12 @@ function renderTodoTags(t) {
     const color = TAG_COLORS.indexOf(tag.color) > -1 ? tag.color : 'red';
     html += '<span class="tag-chip tag-color-' + color + '">' + escapeHtml(tag.name) + '</span>';
   });
-  /* 编辑态下多一个"编辑 / +标签"按钮 */
-  if (__todoEditMode) {
-    html += '<button type="button" class="td-tags-add-btn" onclick="openTodoTagEditor()">' +
-              (tags.length ? '编辑' : '+ 标签') +
-            '</button>';
-  }
+
+  /* ★ 标签按钮常显（不再依赖编辑模式） */
+  html += '<button type="button" class="td-tags-add-btn" onclick="openTodoTagEditor()">' +
+            (tags.length ? '编辑' : '+ 标签') +
+          '</button>';
+
   box.innerHTML = html;
 }
 
@@ -14602,6 +15041,95 @@ function closeTodoTagEditor() {
 }
 
 function saveTodoTags() {
+  const state = window.__todoTagEditState;
+  if (!state) return;
+
+  /* ★ 检查输入框里有没有未添加的文字 */
+  const input = $('todoTagInput');
+  const pendingText = input ? String(input.value || '').trim() : '';
+
+  if (pendingText) {
+    /* 有未添加的文字 → 弹确认框 */
+    showPendingTagConfirm(pendingText);
+    return;
+  }
+
+  /* 没未添加文字 → 直接保存 */
+  doSaveTodoTags();
+}
+
+/* 弹确认框：输入框里有没添加的标签 */
+function showPendingTagConfirm(pendingText) {
+  const state = window.__todoTagEditState;
+  if (!state) return;
+
+  const already = state.selected.some(t => t.name === pendingText);
+  const isFull  = state.selected.length >= TAG_MAX_COUNT;
+
+  if (already || isFull) {
+    /* 已经重名 或 已满 → 直接提示，不提供"添加并保存" */
+    const msg = already
+      ? '输入框里的标签「' + escapeHtml(pendingText) + '」已经加过了。<br>要点「添加」才会生效，或者直接点「保存」忽略它。'
+      : '标签已达上限 ' + TAG_MAX_COUNT + ' 个，输入框里的「' + escapeHtml(pendingText) + '」无法再加。';
+
+    $('modalRoot').innerHTML = `
+      <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <h3>提示</h3>
+            <button class="icon-btn" onclick="closeModal()">×</button>
+          </div>
+          <div class="modal-body">
+            <p style="margin:8px 0;line-height:1.8;">${msg}</p>
+            <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+              <button class="action-btn ghost" onclick="closeModal();renderTodoTagEditor();">返回编辑</button>
+              <button class="action-btn" onclick="closeModal();doSaveTodoTags();">忽略并保存</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  /* 正常情况：可以添加 */
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>有未添加的标签</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;line-height:1.8;">
+            输入框里的「<strong>${escapeHtml(pendingText)}</strong>」还没有点「添加」。<br>
+            要一起保存吗？
+          </p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+            <button class="action-btn ghost" onclick="closeModal();renderTodoTagEditor();">取消</button>
+            <button class="action-btn ghost" style="border-color:var(--red);color:var(--red);" onclick="closeModal();doSaveTodoTags();">丢弃并保存</button>
+            <button class="action-btn" onclick="addPendingTagAndSave('${escapeAttr(pendingText)}');">添加并保存</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* 把输入框内容加入，再保存 */
+function addPendingTagAndSave(text) {
+  const state = window.__todoTagEditState;
+  if (!state) return;
+
+  text = String(text || '').trim();
+
+  if (text && state.selected.length < TAG_MAX_COUNT && !state.selected.some(t => t.name === text)) {
+    state.selected.push({ name: text, color: state.inputColor || 'red' });
+  }
+
+  doSaveTodoTags();
+}
+
+/* 真正执行保存 */
+function doSaveTodoTags() {
   const state = window.__todoTagEditState;
   if (!state) return;
 
@@ -16154,6 +16682,11 @@ const THEMES = [
     id: 'guava',
     name: '芭乐本乐',
     desc: '番石榴绿 · 奶油底 · 清新可爱',
+  },
+  {
+    id: 'zhuxi',
+    name: '朱汐沧澜',
+    desc: '朱红 · 沧蓝 · 奶油底 · 跳跃色块',
   },
 ];
 
@@ -18238,7 +18771,6 @@ function togglePlModuleFold(key, e) {
 
 /* 样式表单回填 */
 function renderPriceListStyleForm(s) {
-  if ($('plFollowTheme')) $('plFollowTheme').checked = !!s.followTheme;
   if ($('plShowDotted'))  $('plShowDotted').checked = s.showDottedLine !== false;
   if ($('plFont'))        $('plFont').value = s.font || 'system';
   if ($('plFontSize'))    $('plFontSize').value = s.fontSize || PL_DEFAULT_FONT_SIZE;
@@ -18949,7 +19481,6 @@ function openPlLinesEditor(title, lines, onSave) {
 function onPlStyleChange() {
   const s = getPriceListSettings();
 
-  if ($('plFollowTheme')) s.followTheme = $('plFollowTheme').checked;
   if ($('plShowDotted'))  s.showDottedLine = $('plShowDotted').checked;
   if ($('plFont'))        s.font = $('plFont').value;
   if ($('plFontSize'))    s.fontSize = parseFloat($('plFontSize').value) || PL_DEFAULT_FONT_SIZE;

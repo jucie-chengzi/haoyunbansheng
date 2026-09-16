@@ -421,6 +421,24 @@
               <input type="color" id="rsBgColor" value="#ffffff" oninput="onColorChanged('bgColor')" class="color-input-hidden" />
               <input type="text" class="color-hex" id="rsBgColorHex" value="#ffffff" readonly />
 
+              <label>线条颜色（分割线、外框）</label>
+              <div class="color-swatches" data-target="rsLineColor">
+                <button type="button" class="color-swatch" data-color="#b8c2cc" style="background:#b8c2cc" onclick="pickColor('rsLineColor','#b8c2cc','lineColor')"></button>
+                <button type="button" class="color-swatch" data-color="#97cceb" style="background:#97cceb" onclick="pickColor('rsLineColor','#97cceb','lineColor')"></button>
+                <button type="button" class="color-swatch" data-color="#a5c757" style="background:#a5c757" onclick="pickColor('rsLineColor','#a5c757','lineColor')"></button>
+                <button type="button" class="color-swatch" data-color="#fbccdb" style="background:#fbccdb" onclick="pickColor('rsLineColor','#fbccdb','lineColor')"></button>
+                <button type="button" class="color-swatch" data-color="#e7e7ff" style="background:#e7e7ff" onclick="pickColor('rsLineColor','#e7e7ff','lineColor')"></button>
+                <button type="button" class="color-custom-btn" onclick="openCustomColor('rsLineColor')" title="自定义颜色">＋</button>
+                <button type="button" class="color-reset-btn" onclick="resetColor('rsLineColor','#b8c2cc','lineColor')" title="恢复默认">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="1 4 1 10 7 10"/>
+                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                  </svg>
+                </button>
+              </div>
+              <input type="color" id="rsLineColor" value="#b8c2cc" oninput="onColorChanged('lineColor')" class="color-input-hidden" />
+              <input type="text" class="color-hex" id="rsLineColorHex" value="#b8c2cc" readonly />
+
               <label>字体主色（原本黑色）</label>
               <div class="color-swatches" data-target="rsColorPrimary">
                 <button type="button" class="color-swatch" data-color="#97cceb" style="background:#97cceb" title="#97cceb" onclick="pickColor('rsColorPrimary','#97cceb','colorPrimary')"></button>
@@ -529,7 +547,7 @@
     </section>
 
     <!-- 订单列表 -->
-    <section class="page" id="pageTodo">
+        <section class="page" id="pageTodo">
       <div class="order-page-head">
         <div class="order-tabs">
           <button type="button" class="order-tab active" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
@@ -537,27 +555,49 @@
           <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
           <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
         </div>
-        <button type="button" class="order-filter-btn" onclick="openOrderFilterModal()" title="筛选订单">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 5 H21 L14 13 V20 L10 18 V13 Z"/>
-          </svg>
-          <span>筛选</span>
-        </button>
+        <div class="order-page-head-right">
+          <button type="button" class="order-filter-btn" onclick="openOrderFilterModal()" title="筛选订单">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 5 H21 L14 13 V20 L10 18 V13 Z"/>
+            </svg>
+            <span>筛选</span>
+          </button>
+          <button type="button" class="order-manage-btn" id="todoManageBtn" onclick="toggleOrderManageMode('todo')">管理</button>
+        </div>
       </div>
+      <section class="panel order-search-panel">
+        <input id="todoSearch" class="order-search" placeholder="搜索单主 ID / 企划 / 角色 / 标签" oninput="renderTodoList()" />
+      </section>
       <section class="panel">
+        <div class="order-manage-bar" id="todoManageBar" style="display:none;">
+          <div class="order-manage-bar-left">
+            <span id="todoSelectedCount">已选择 0 项</span>
+          </div>
+          <div class="order-manage-bar-right">
+            <button type="button" class="order-manage-bar-btn ghost" onclick="toggleAllOrderSelect('todo')" id="todoSelectAllBtn">全选</button>
+            <button type="button" class="order-manage-bar-btn danger" onclick="confirmOrderBatchDelete('todo')" id="todoBatchDeleteBtn" disabled>删除</button>
+            <button type="button" class="order-manage-bar-btn ghost" onclick="exitOrderManageMode('todo')">完成</button>
+          </div>
+        </div>
         <div id="todoListContainer"></div>
       </section>
     </section>
 
-    <section class="page" id="pageCompleted">
-      <div class="order-tabs">
-        <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
-        <button type="button" class="order-tab active" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
-        <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
-        <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        <section class="page" id="pageCompleted">
+      <div class="order-page-head">
+        <div class="order-tabs">
+          <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+          <button type="button" class="order-tab active" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+          <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+          <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        </div>
+        <div class="order-page-head-right">
+          <button type="button" class="order-manage-btn" id="completedManageBtn" onclick="toggleOrderManageMode('completed')">管理</button>
+        </div>
       </div>
       <section class="panel order-filter-panel">
-        <div class="order-filter-bar">
+        <input id="completedSearch" class="order-search" placeholder="搜索单主 ID / 联系方式 / 标签" oninput="renderCompletedList()" />
+        <div class="order-filter-bar" style="margin-top:12px;">
           <div class="order-range-tabs">
             <button type="button" class="order-range-btn active" data-range="month" onclick="switchOrderRange('completed','month')">月</button>
             <button type="button" class="order-range-btn" data-range="year" onclick="switchOrderRange('completed','year')">年</button>
@@ -592,19 +632,35 @@
         </div>
       </section>
       <section class="panel">
+        <div class="order-manage-bar" id="completedManageBar" style="display:none;">
+          <div class="order-manage-bar-left">
+            <span id="completedSelectedCount">已选择 0 项</span>
+          </div>
+          <div class="order-manage-bar-right">
+            <button type="button" class="order-manage-bar-btn ghost" onclick="toggleAllOrderSelect('completed')" id="completedSelectAllBtn">全选</button>
+            <button type="button" class="order-manage-bar-btn danger" onclick="confirmOrderBatchDelete('completed')" id="completedBatchDeleteBtn" disabled>删除</button>
+            <button type="button" class="order-manage-bar-btn ghost" onclick="exitOrderManageMode('completed')">完成</button>
+          </div>
+        </div>
         <div id="completedListContainer"></div>
       </section>
     </section>
 
-    <section class="page" id="pageCancelled">
-      <div class="order-tabs">
-        <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
-        <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
-        <button type="button" class="order-tab active" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
-        <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        <section class="page" id="pageCancelled">
+      <div class="order-page-head">
+        <div class="order-tabs">
+          <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+          <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+          <button type="button" class="order-tab active" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+          <button type="button" class="order-tab" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        </div>
+        <div class="order-page-head-right">
+          <button type="button" class="order-manage-btn" id="cancelledManageBtn" onclick="toggleOrderManageMode('cancelled')">管理</button>
+        </div>
       </div>
       <section class="panel order-filter-panel">
-        <div class="order-filter-bar">
+        <input id="cancelledSearch" class="order-search" placeholder="搜索单主 ID / 联系方式 / 标签" oninput="renderCancelledList()" />
+        <div class="order-filter-bar" style="margin-top:12px;">
           <div class="order-range-tabs">
             <button type="button" class="order-range-btn active" data-range="month" onclick="switchOrderRange('cancelled','month')">月</button>
             <button type="button" class="order-range-btn" data-range="year" onclick="switchOrderRange('cancelled','year')">年</button>
@@ -639,19 +695,35 @@
         </div>
       </section>
       <section class="panel">
+        <div class="order-manage-bar" id="cancelledManageBar" style="display:none;">
+          <div class="order-manage-bar-left">
+            <span id="cancelledSelectedCount">已选择 0 项</span>
+          </div>
+          <div class="order-manage-bar-right">
+            <button type="button" class="order-manage-bar-btn ghost" onclick="toggleAllOrderSelect('cancelled')" id="cancelledSelectAllBtn">全选</button>
+            <button type="button" class="order-manage-bar-btn danger" onclick="confirmOrderBatchDelete('cancelled')" id="cancelledBatchDeleteBtn" disabled>删除</button>
+            <button type="button" class="order-manage-bar-btn ghost" onclick="exitOrderManageMode('cancelled')">完成</button>
+          </div>
+        </div>
         <div id="cancelledListContainer"></div>
       </section>
     </section>
 
-    <section class="page" id="pageDiscarded">
-      <div class="order-tabs">
-        <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
-        <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
-        <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
-        <button type="button" class="order-tab active" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        <section class="page" id="pageDiscarded">
+      <div class="order-page-head">
+        <div class="order-tabs">
+          <button type="button" class="order-tab" data-tab="todo" onclick="switchOrderTab('todo')"><span class="order-tab-circle">待</span></button>
+          <button type="button" class="order-tab" data-tab="completed" onclick="switchOrderTab('completed')"><span class="order-tab-circle">结</span></button>
+          <button type="button" class="order-tab" data-tab="cancelled" onclick="switchOrderTab('cancelled')"><span class="order-tab-circle">撤</span></button>
+          <button type="button" class="order-tab active" data-tab="discarded" onclick="switchOrderTab('discarded')"><span class="order-tab-circle">废</span></button>
+        </div>
+        <div class="order-page-head-right">
+          <button type="button" class="order-manage-btn" id="discardedManageBtn" onclick="toggleOrderManageMode('discarded')">管理</button>
+        </div>
       </div>
       <section class="panel order-filter-panel">
-        <div class="order-filter-bar">
+        <input id="discardedSearch" class="order-search" placeholder="搜索单主 ID / 联系方式 / 标签" oninput="renderDiscardedList()" />
+        <div class="order-filter-bar" style="margin-top:12px;">
           <div class="order-range-tabs">
             <button type="button" class="order-range-btn active" data-range="month" onclick="switchOrderRange('discarded','month')">月</button>
             <button type="button" class="order-range-btn" data-range="year" onclick="switchOrderRange('discarded','year')">年</button>
@@ -686,6 +758,16 @@
         </div>
       </section>
       <section class="panel">
+        <div class="order-manage-bar" id="discardedManageBar" style="display:none;">
+          <div class="order-manage-bar-left">
+            <span id="discardedSelectedCount">已选择 0 项</span>
+          </div>
+          <div class="order-manage-bar-right">
+            <button type="button" class="order-manage-bar-btn ghost" onclick="toggleAllOrderSelect('discarded')" id="discardedSelectAllBtn">全选</button>
+            <button type="button" class="order-manage-bar-btn danger" onclick="confirmOrderBatchDelete('discarded')" id="discardedBatchDeleteBtn" disabled>删除</button>
+            <button type="button" class="order-manage-bar-btn ghost" onclick="exitOrderManageMode('discarded')">完成</button>
+          </div>
+        </div>
         <div id="discardedListContainer"></div>
       </section>
     </section>
@@ -1112,13 +1194,6 @@
               <div class="section-head-row" style="margin-top:0;">
                 <h2 class="section-title" style="flex:1;margin:0;">基础样式</h2>
                 <button type="button" class="action-btn ghost td-mini-btn" onclick="openPlPositionEditor()" style="margin-right:8px;">位置</button>
-                <label class="switch-wrap" title="跟随主题">
-                  <span class="switch-label-text">跟随主题</span>
-                  <span class="switch">
-                    <input type="checkbox" id="plFollowTheme" onchange="onPlStyleChange()" />
-                    <span class="switch-slider"></span>
-                  </span>
-                </label>
               </div>
 
               <label>布局</label>
