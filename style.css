@@ -6584,6 +6584,9 @@ body.is-preset-dragging {
    - 用 zoom 整体缩放，布局和生成图完全一致
    - flex-shrink: 0 防止被 flex 压扁
 */
+/* 所有价目表页面：真实宽度 640px，用 zoom 缩放适配容器 */
+.price-list-pages .pl-page,
+.pl-settings-preview-pages .pl-page,
 .pl-settings-preview-pages > .pl-page {
   flex: 0 0 auto !important;
   width: 640px !important;
@@ -6592,6 +6595,11 @@ body.is-preset-dragging {
   zoom: var(--pl-preview-zoom, 1);
   margin-bottom: 14px;
   transform-origin: top left;
+}
+
+/* 查看页容器也要给 zoom 变量兜底 */
+.price-list-pages {
+  --pl-preview-zoom: 1;
 }
 
 /* 桌面端：预览面板本身允许纵向滚动、横向裁切 */

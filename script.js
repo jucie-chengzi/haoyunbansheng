@@ -17469,9 +17469,11 @@ async function renderPriceListPreview() {
 
 /* 预览区自适应缩放：按可用宽度调整 --pl-preview-zoom */
 function updatePlPreviewScale() {
+  /* ★ 这次把查看页容器也加进来，三个视图统一缩放 */
   const containers = [
-    $('plDesktopPreviewPages'),
-    $('plMobilePreviewPages'),
+    $('priceListPages'),           /* 查看页 */
+    $('plDesktopPreviewPages'),    /* 桌面预览 */
+    $('plMobilePreviewPages'),     /* 移动预览 */
   ].filter(Boolean);
 
   containers.forEach(container => {
@@ -19398,31 +19400,37 @@ function resetPriceListSettings() {
    ═══════════════════════════════════════════════════════ */
 
 async function savePriceListImage() {
-  const pages = document.querySelectorAll('#priceListPages .pl-page');
-  if (!pages.length) {
+  const data     = getPriceList();
+  const settings = getPriceListSettings();
+  const global   = getPriceListGlobal();
+
+  if (!checkPlHasContent(data, global)) {
     showSimpleAlert('提示', '价目表还没有内容。');
     return;
   }
 
-  /* ★ 导出前把画布临时撑到设计宽度 640px，避免手机端被压缩后变糊 */
-  const originalStyles = [];
-  pages.forEach(p => {
-    originalStyles.push({
-      width: p.style.width,
-      maxWidth: p.style.maxWidth,
-    });
-    p.style.width = '640px';
-    p.style.maxWidth = '640px';
-  });
-
-  /* 等一帧，让布局生效 */
-  await new Promise(r => requestAnimationFrame(r));
-
-  /* 隐藏页码 */
-  const nums = document.querySelectorAll('.pl-page-num');
-  nums.forEach(el => { el.dataset.oldDisplay = el.style.display; el.style.display = 'none'; });
+  /* ★ 关键：创建一个离屏容器，真实宽度 640px，重新渲染一份 */
+  const offscreen = document.createElement('div');
+  offscreen.style.position = 'fixed';
+  offscreen.style.left = '-99999px';
+  offscreen.style.top  = '0';
+  offscreen.style.width = '640px';
+  offscreen.style.background = '#ffffff';
+  document.body.appendChild(offscreen);
 
   try {
+    /* 用和预览完全一样的渲染函数，渲染到离屏容器 */
+    buildPriceListPages(offscreen, data, settings, global);
+
+    /* 等布局稳定 */
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 150));
+
+    /* 隐藏页码 */
+    const nums = offscreen.querySelectorAll('.pl-page-num');
+    nums.forEach(el => { el.style.display = 'none'; });
+
+    const pages = offscreen.querySelectorAll('.pl-page');
     for (let i = 0; i < pages.length; i++) {
       const canvas = await html2canvas(pages[i], {
         scale: 3,
@@ -19441,12 +19449,7 @@ async function savePriceListImage() {
   } catch (err) {
     alert('生成图片失败：' + (err && err.message ? err.message : '未知'));
   } finally {
-    /* 恢复 */
-    pages.forEach((p, i) => {
-      p.style.width = originalStyles[i].width;
-      p.style.maxWidth = originalStyles[i].maxWidth;
-    });
-    nums.forEach(el => { el.style.display = el.dataset.oldDisplay || ''; });
+    document.body.removeChild(offscreen);
   }
 }
 
