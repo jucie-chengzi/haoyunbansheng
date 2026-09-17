@@ -25,7 +25,7 @@
 /* ══════════ [U-01] 全局常量 / 存储 key ══════════ */
 
 /* ---- 应用版本（用于更新公告） ---- */
-const APP_VERSION = '1.1.1';
+const APP_VERSION = '1.1.2';
 const ANNOUNCEMENT_SEEN_KEY = 'listReceiptAnnouncementSeen';
 
 /* ---- 数据版本 + 迁移 ---- */
@@ -16814,6 +16814,19 @@ const ANNOUNCEMENTS = {
         <li><strong>新主题「朱汐沧澜」</strong>：朱红 + 沧蓝的跳跃色块风格，在「工具箱 → 主题风格」里切换。</li>
       </ul>
       <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
+    `,
+  },
+   '1.1.2': {
+    title: '修复与优化',
+    html: `
+      <ul style="padding-left:20px;line-height:1.85;">
+        <li>修复稿件预设「编辑」「删除」无效的问题，现在可正常编辑和删除。</li>
+        <li>筛选结果页新增「管理」，支持多选、批量删除。</li>
+        <li>小票页新增「权限」开关（默认开启）。关闭后无需选择权限，小票中也不显示权限。</li>
+        <li>移除小票填写区多余的「保存图片」按钮，统一使用生成后的保存按钮。</li>
+        <li>修复 iOS 手机保存小票无反应的问题，现在会弹出系统分享，选择「存储图像」即可保存到相册。</li>
+      </ul>
+      <p style="margin-top:12px;">已有数据不受影响，无需手动处理。</p>
     `,
   },
 };
