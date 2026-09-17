@@ -189,6 +189,13 @@
           <section class="panel" id="detailGroupPanel">
             <div class="section-head-row">
               <h2 class="section-title" style="flex:1;margin:0 0 14px;">定制细则</h2>
+              <label class="switch-wrap" title="关闭后，稿件不需要选权限，小票中也不显示权限列" style="margin-right:12px;">
+                <span class="switch-label-text">权限</span>
+                <span class="switch">
+                  <input type="checkbox" id="licenseToggle" checked onchange="onLicenseToggle()" />
+                  <span class="switch-slider"></span>
+                </span>
+              </label>
               <label class="switch-wrap" title="打开后可以不填稿件内容（仅占位）">
                 <span class="switch-label-text">占位</span>
                 <span class="switch">
@@ -220,7 +227,6 @@
             <div class="actions">
               <button class="action-btn ghost" onclick="resetAll()">重置</button>
               <button class="action-btn" onclick="generate()">确定生成</button>
-              <button class="action-btn ghost" onclick="saveImage()">保存图片</button>
             </div>
           </section>
 
@@ -768,15 +774,29 @@
     </section>
 
     <!-- 筛选结果 -->
-    <section class="page" id="pageOrderFilterResult">
+        <section class="page" id="pageOrderFilterResult">
       <div class="page-head">
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
           <h1 style="margin:0;">筛选结果</h1>
           <span class="ofr-summary" id="ofrSummary"></span>
         </div>
-        <button class="action-btn ghost td-mini-btn" onclick="backFromOrderFilterResult()">← 返回</button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="order-manage-btn" id="orderFilterResultManageBtn" onclick="toggleOrderManageMode('orderFilterResult')">管理</button>
+          <button class="action-btn ghost td-mini-btn" onclick="backFromOrderFilterResult()">← 返回</button>
+        </div>
       </div>
+
       <section class="panel">
+        <div class="order-manage-bar" id="orderFilterResultManageBar" style="display:none;">
+          <div class="order-manage-bar-left">
+            <span id="orderFilterResultSelectedCount">已选择 0 项</span>
+          </div>
+          <div class="order-manage-bar-right">
+            <button type="button" class="order-manage-bar-btn ghost" onclick="toggleAllOrderSelect('orderFilterResult')" id="orderFilterResultSelectAllBtn">全选</button>
+            <button type="button" class="order-manage-bar-btn danger" onclick="confirmOrderBatchDelete('orderFilterResult')" id="orderFilterResultBatchDeleteBtn" disabled>删除</button>
+            <button type="button" class="order-manage-bar-btn ghost" onclick="exitOrderManageMode('orderFilterResult')">完成</button>
+          </div>
+        </div>
         <div id="orderFilterResultContainer"></div>
       </section>
     </section>

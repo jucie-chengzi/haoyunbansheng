@@ -3670,7 +3670,7 @@ function validateBeforeGenerate() {
         if (qtyEl && (qtyEl.value === '' || !isFinite(Number(qtyEl.value)) || Number(qtyEl.value) <= 0)) {
           addError(qtyEl, `稿件组 ${gi + 1} 第 ${ii + 1} 个稿件：「数量」未填写或无效`);
         }
-        if (licEl && !licEl.value) {
+        if (isLicenseEnabled() && licEl && !licEl.value) {
           addError(licEl, `稿件组 ${gi + 1} 第 ${ii + 1} 个稿件：「权限」未选择`);
         }
 
@@ -3729,8 +3729,9 @@ function calcItem(block, licenseOverride) {
   const name    = block.querySelector('.item-name').value.trim();
   const price   = Number(block.querySelector('.item-price').value) || 0;
   const qty     = Number(block.querySelector('.item-qty').value) || 1;
-  const license = licenseOverride || block.querySelector('.item-license').value;
-  const m       = getLicenseMultiplier(license);
+  const licenseEnabled = isLicenseEnabled();
+  const license = licenseEnabled ? (licenseOverride || block.querySelector('.item-license').value) : '';
+  const m = licenseEnabled ? getLicenseMultiplier(license) : 1;
 
   const addons = [];   /* 增项 */
   const nodes  = [];   /* 节点 */
@@ -4081,9 +4082,10 @@ function generate() {
       const section = document.createElement('div');
       section.className = 'group-section';
 
+      const showLicense = isLicenseEnabled();
       let html = `<div class="group-section-title">${escapeHtml(groupLabel)}</div>`;
       html += `<table class="list"><thead><tr>
-        <th>稿件</th><th class="r">单价</th><th class="c">数量</th><th class="c">权限</th><th class="r">小计</th>
+        <th>稿件</th><th class="r">单价</th><th class="c">数量</th>${showLicense ? '<th class="c">权限</th>' : ''}<th class="r">小计</th>
       </tr></thead><tbody>`;
 
       cg.items.forEach((r, idx) => {
@@ -4091,14 +4093,14 @@ function generate() {
         html += `<tr><td><div class="item-name">${idx + 1}. ${escapeHtml(r.name)}</div></td>
           <td class="r">${fmt(r.price)}</td>
           <td class="c">${r.qty}件</td>
-          <td class="c">${licenseText(r.license)}</td>
+          ${showLicense ? `<td class="c">${licenseText(r.license)}</td>` : ''}
           <td class="r">${fmt(r.itemSubtotal)}</td></tr>`;
 
         /* 基础行 */
         html += `<tr class="part-row"><td><div style="padding-left:14px;">└ 基础</div></td>
           <td class="r"><span class="sub">${fmt(r.price)}</span></td>
           <td class="c"><span class="sub">${r.qty}件</span></td>
-          <td class="c"><span class="sub">${licenseText(r.license)}</span></td>
+          ${showLicense ? `<td class="c"><span class="sub">${licenseText(r.license)}</span></td>` : ''}
           <td class="r"><span class="sub">${fmt(r.price * r.qty * r.m)}</span></td></tr>`;
 
         /* 增项（└ 前缀区分） */
@@ -4107,7 +4109,7 @@ function generate() {
           html += `<tr class="part-row"><td><div style="padding-left:26px;">└ ${escapeHtml(x.name)}（${opStr}）</div></td>
             <td class="r"><span class="sub">${fmt(x.unit)}</span></td>
             <td class="c"><span class="sub">${r.qty}件</span></td>
-            <td class="c"><span class="sub">${licenseText(r.license)}</span></td>
+            ${showLicense ? `<td class="c"><span class="sub">${licenseText(r.license)}</span></td>` : ''}
             <td class="r"><span class="sub">${fmt(x.subtotal)}</span></td></tr>`;
         });
 
@@ -4116,7 +4118,7 @@ function generate() {
           html += `<tr class="part-row"><td><div style="padding-left:26px;">◆ ${escapeHtml(x.name)}（×${pctShort(x.value)}）</div></td>
             <td class="r"><span class="sub">${fmt(x.unit)}</span></td>
             <td class="c"><span class="sub">${r.qty}件</span></td>
-            <td class="c"><span class="sub">${licenseText(r.license)}</span></td>
+            ${showLicense ? `<td class="c"><span class="sub">${licenseText(r.license)}</span></td>` : ''}
             <td class="r"><span class="sub">${fmt(x.subtotal)}</span></td></tr>`;
         });
       });
@@ -9276,6 +9278,7 @@ var __orderManageState = {
   completed: { active: false, selected: {} },
   cancelled: { active: false, selected: {} },
   discarded: { active: false, selected: {} },
+  orderFilterResult: { active: false, selected: {} },
 };
 
 /* ══════════ 订单批量管理 ══════════ */
@@ -9285,6 +9288,7 @@ function renderOrderListForPage(prefix) {
   if (prefix === 'completed') return renderCompletedList();
   if (prefix === 'cancelled') return renderCancelledList();
   if (prefix === 'discarded') return renderDiscardedList();
+  if (prefix === 'orderFilterResult') return renderOrderFilterResult();
 }
 
 function toggleOrderManageMode(prefix) {
@@ -9393,6 +9397,10 @@ function getFilteredOrderKeys(prefix) {
       .map(c => c.id);
   }
 
+  if (prefix === 'orderFilterResult') {
+    return (__orderFilterResults || []).map(r => r.type + ':' + r.data.id);
+  }
+
   return [];
 }
 
@@ -9446,9 +9454,12 @@ function confirmOrderBatchDelete(prefix) {
   if (!keys.length) { showSimpleAlert('提示', '请先勾选要删除的记录。'); return; }
 
   const label = {
-    todo: '订单', completed: '结单记录',
-    cancelled: '撤单记录', discarded: '废稿记录'
-  }[prefix];
+    todo: '订单',
+    completed: '结单记录',
+    cancelled: '撤单记录',
+    discarded: '废稿记录',
+    orderFilterResult: '记录'
+  }[prefix] || '记录';
 
   $('modalRoot').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -9477,6 +9488,40 @@ function doOrderBatchDelete(prefix) {
   if (!st) return;
   const keys = Object.keys(st.selected);
   if (!keys.length) { closeModal(); return; }
+
+  /* ★ 筛选结果：按类型分组删除 */
+  if (prefix === 'orderFilterResult') {
+    const todoIds = [], completedIds = [], cancelledIds = [], discardedIds = [];
+    keys.forEach(k => {
+      const idx = k.indexOf(':');
+      const type = k.slice(0, idx);
+      const id = k.slice(idx + 1);
+      if (type === 'todo') todoIds.push(id);
+      else if (type === 'completed') completedIds.push(id);
+      else if (type === 'cancelled') cancelledIds.push(id);
+      else if (type === 'discarded') discardedIds.push(id);
+    });
+
+    if (todoIds.length) {
+      setTodos(getTodos().filter(t => todoIds.indexOf(t.id) < 0));
+      todoIds.forEach(id => removeFlowsByTodoId(id));
+    }
+    if (completedIds.length) setCompleted(getCompleted().filter(c => completedIds.indexOf(c.id) < 0));
+    if (cancelledIds.length) setCancelled(getCancelled().filter(c => cancelledIds.indexOf(c.id) < 0));
+    if (discardedIds.length) setDiscarded(getDiscarded().filter(c => discardedIds.indexOf(c.id) < 0));
+
+    /* 从筛选结果数组里也移除 */
+    __orderFilterResults = (__orderFilterResults || []).filter(r => !st.selected[r.type + ':' + r.data.id]);
+
+    st.selected = {};
+    closeModal();
+    showSimpleAlert('已删除', '已删除 ' + keys.length + ' 条记录。');
+    renderOrderFilterResult();
+    if (typeof renderSchedule === 'function') renderSchedule();
+    if (typeof renderStatsPage === 'function') renderStatsPage();
+    if (typeof renderMasterList === 'function') renderMasterList();
+    return;
+  }
 
   if (prefix === 'todo') {
     setTodos(getTodos().filter(t => !st.selected[t.id]));
@@ -11473,6 +11518,10 @@ function resetAll() {
   const pt = $('placeholderToggle');
   if (pt) pt.checked = false;
 
+  /* ★ 权限开关恢复默认（打开） */
+  if ($('licenseToggle')) $('licenseToggle').checked = true;
+  setLicenseEnabled(true);
+
   if (typeof applyPlaceholderMode === 'function') applyPlaceholderMode(false);
   if (typeof setDepositModeLocked === 'function') setDepositModeLocked(false);
 
@@ -12036,6 +12085,37 @@ function removeGroup(btn) {
   renumberGroups();
 }
 
+/* ══════════ 权限开关 ══════════ */
+
+function isLicenseEnabled() {
+  try {
+    const v = localStorage.getItem('listReceiptLicenseEnabled');
+    return v !== '0';
+  } catch (e) { return true; }
+}
+
+function setLicenseEnabled(on) {
+  try { localStorage.setItem('listReceiptLicenseEnabled', on ? '1' : '0'); } catch (e) {}
+}
+
+function onLicenseToggle() {
+  const on = !!($('licenseToggle') && $('licenseToggle').checked);
+  setLicenseEnabled(on);
+  applyLicenseMode(on);
+  if (!on) {
+    document.querySelectorAll('.item-license').forEach(sel => { sel.value = ''; });
+  }
+}
+
+function applyLicenseMode(on) {
+  document.querySelectorAll('.item-block').forEach(block => {
+    const licSelect = block.querySelector('.item-license');
+    if (!licSelect) return;
+    const parentDiv = licSelect.parentElement;
+    if (parentDiv) parentDiv.style.display = on ? '' : 'none';
+  });
+}
+
 function onPlaceholderToggle() {
   const on = $('placeholderToggle') && $('placeholderToggle').checked;
 
@@ -12109,6 +12189,7 @@ function addItemToGroup(target, presetObj) {
   `;
   itemsEl.appendChild(div);
   if (presetObj) fillPresetIntoBlock(div, presetObj);
+  applyLicenseMode(isLicenseEnabled());
 }
 
 function removeItemInGroup(btn) {
@@ -13247,7 +13328,7 @@ function renderPresetCards() {
           </div>
         </div>
         <div class="preset-group-body" data-group-id="${escapeAttr(g.id)}">
-          ${items.length ? items.map(p => renderPresetCardItem(p, g.id)).join('') : '<div class="preset-group-empty">该分组暂无预设</div>'}
+          ${items.length ? items.map(p => renderPresetCardItem(p, g.id, allPresets.indexOf(p))).join('') : '<div class="preset-group-empty">该分组暂无预设</div>'}
         </div>
       </div>`;
   });
@@ -13269,7 +13350,7 @@ function renderPresetCards() {
         </div>
       </div>
       <div class="preset-group-body" data-group-id="__UNGROUPED__">
-        ${ungrouped.length ? ungrouped.map(p => renderPresetCardItem(p, '__UNGROUPED__')).join('') : '<div class="preset-group-empty">暂无未分组预设</div>'}
+        ${ungrouped.length ? ungrouped.map(p => renderPresetCardItem(p, '__UNGROUPED__', allPresets.indexOf(p))).join('') : '<div class="preset-group-empty">暂无未分组预设</div>'}
       </div>
     </div>`;
 
@@ -13286,9 +13367,7 @@ function renderPresetCards() {
 }
 
 /* 单条预设卡片 */
-function renderPresetCardItem(p, groupId) {
-  /* ★ 用引用相等找全局索引，比按名字更稳 */
-  const globalIdx = getPresets().indexOf(p);
+function renderPresetCardItem(p, groupId, globalIdx) {
   const summary = presetSummary(p);
   return `
     <div class="preset-card" data-preset-name="${escapeAttr(p.name)}" data-group-id="${escapeAttr(groupId)}">
@@ -14560,6 +14639,51 @@ function discountPresetPicked(i) {
      现在用一次性 guard 保证 after() 只跑一次。
    ═══════════════════════════════════════════════════════ */
 
+   /* ══════════ 通用图片保存（兼容 iOS） ══════════ */
+async function saveOrShareImage(dataUrl, filename) {
+  /* 1. 优先用 Web Share API（iOS 14+ 支持分享文件） */
+  if (navigator.share && navigator.canShare) {
+    try {
+      const res = await fetch(dataUrl);
+      const blob = await res.blob();
+      const file = new File([blob], filename, { type: 'image/png' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file] });
+        return true;
+      }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return true;   /* 用户取消，不算失败 */
+      /* 其它错误 → 继续降级 */
+    }
+  }
+
+  /* 2. 非 iOS：用 a 标签下载 */
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+              || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (!isIOS) {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    return true;
+  }
+
+  /* 3. iOS 兜底：新窗口打开图片，让用户长按保存 */
+  const w = window.open('', '_blank');
+  if (w) {
+    w.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>保存图片</title></head><body style="margin:0;background:#f4f5f7;text-align:center;">');
+    w.document.write('<p style="font-family:-apple-system,sans-serif;font-size:15px;color:#333;padding:14px 20px;margin:0;background:#fff;border-bottom:1px solid #e0e0e0;">长按下方图片 → 选择「存储到照片」</p>');
+    w.document.write('<img src="' + dataUrl + '" style="max-width:100%;display:block;margin:12px auto;">');
+    w.document.write('</body></html>');
+    w.document.close();
+  } else {
+    alert('无法打开保存窗口，请检查浏览器是否拦截了弹出窗口。');
+  }
+  return true;
+}
+
 /* 截图前把所有编辑手柄藏起来（避免被截进去） */
 function hideAllReceiptHandles() {
   const handles = document.querySelectorAll('.receipt-img-handle');
@@ -14590,12 +14714,14 @@ function saveImage() {
       scale: 2,
       backgroundColor: '#ffffff',
       useCORS: true,
-    }).then(canvas => {
-      const link = document.createElement('a');
+    }).then(async canvas => {
       const orderDate = $('orderDate').value || 'list';
-      link.download = '小票_' + orderDate.replace(/-/g, '') + '.png';
-      link.href = canvas.toDataURL('image/png');
-      link.click();
+      const filename = '小票_' + orderDate.replace(/-/g, '') + '.png';
+      try {
+        await saveOrShareImage(canvas.toDataURL('image/png'), filename);
+      } catch (e) {
+        console.warn('保存图片失败', e);
+      }
       restoreAllReceiptHandles(handleState);
     }).catch(err => {
       restoreAllReceiptHandles(handleState);
@@ -15547,18 +15673,20 @@ function renderOrderFilterResult() {
         '<div class="ofr-empty-icon">🔍</div>' +
         '<div>没有符合条件的订单</div>' +
       '</div>';
+    updateOrderManageBar('orderFilterResult');
     return;
   }
 
   box.innerHTML = '<div class="order-filter-result-list">' +
     results.map(r => renderOrderFilterCard(r)).join('') +
   '</div>';
+
+  updateOrderManageBar('orderFilterResult');
 }
 
 function renderOrderFilterCard(r) {
   const { type, status, data } = r;
 
-  /* 状态标签 + 样式类 */
   let statusLabel = '', statusCls = '';
   if (status === 'todo-active')           { statusLabel = '未完成'; statusCls = 'is-todo'; }
   else if (status === 'todo-placeholder') { statusLabel = '待开单'; statusCls = 'is-todo'; }
@@ -15570,6 +15698,20 @@ function renderOrderFilterCard(r) {
   const d = data;
   const title = escapeHtml(d.clientName || d.clientId || '未命名');
 
+  const key = type + ':' + d.id;
+  const st = __orderManageState.orderFilterResult;
+  const isSelected = !!st.selected[key];
+  const manageCls = isSelected ? ' is-selected' : '';
+
+  const circleHtml = st.active
+    ? `<div class="order-select-circle" onclick="event.stopPropagation();toggleOrderSelect('orderFilterResult','${escapeAttr(key)}')" title="选择">
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+           <circle cx="12" cy="12" r="10"/>
+           ${isSelected ? '<polyline points="8 12 11 15 16 9"/>' : ''}
+         </svg>
+       </div>`
+    : '';
+
   const tagsHtml = (d.tags && d.tags.length)
     ? '<div class="ofr-card-tags">' + d.tags.map(t => {
         const c = TAG_COLORS.indexOf(t.color) > -1 ? t.color : 'red';
@@ -15577,7 +15719,6 @@ function renderOrderFilterCard(r) {
       }).join('') + '</div>'
     : '';
 
-  /* 根据类型拼不同的元信息 */
   let metaParts = [];
   metaParts.push('ID：' + escapeHtml(d.clientId || '—'));
   metaParts.push('接单：' + escapeHtml(d.orderDate || '—'));
@@ -15592,13 +15733,8 @@ function renderOrderFilterCard(r) {
     metaParts.push('作废：' + escapeHtml(d.discardedDate || '—'));
   }
 
-  /* 点击进对应详情页 */
-  let clickFn = 'openTodoDetail';
-  if (type === 'completed') clickFn = 'openCompletedDetail';
-  else if (type === 'cancelled') clickFn = 'openCancelledDetail';
-  else if (type === 'discarded') clickFn = 'openDiscardedDetail';
-
-  return '<div class="ofr-card ' + statusCls + '" onclick="' + clickFn + '(\'' + escapeAttr(d.id) + '\')">' +
+  return '<div class="ofr-card ' + statusCls + manageCls + '" onclick="onOrderFilterCardClick(\'' + escapeAttr(key) + '\')">' +
+    circleHtml +
     '<div class="ofr-card-body">' +
       '<div class="ofr-card-title-row">' +
         '<div class="ofr-card-title">' + title + '</div>' +
@@ -15610,6 +15746,22 @@ function renderOrderFilterCard(r) {
     '</div>' +
     '<div class="ofr-card-status ' + statusCls + '">' + statusLabel + '</div>' +
   '</div>';
+}
+
+function onOrderFilterCardClick(key) {
+  const st = __orderManageState.orderFilterResult;
+  if (st.active) {
+    toggleOrderSelect('orderFilterResult', key);
+    return;
+  }
+
+  const r = (__orderFilterResults || []).find(x => (x.type + ':' + x.data.id) === key);
+  if (!r) return;
+  const { type, data } = r;
+  if (type === 'todo')            openTodoDetail(data.id);
+  else if (type === 'completed')  openCompletedDetail(data.id);
+  else if (type === 'cancelled')  openCancelledDetail(data.id);
+  else if (type === 'discarded')  openDiscardedDetail(data.id);
 }
 
 function backFromOrderFilterResult() {
@@ -20254,13 +20406,8 @@ async function savePriceListImage() {
         backgroundColor: '#ffffff',
         useCORS: true,
       });
-      const link = document.createElement('a');
       const suffix = pages.length > 1 ? ('_' + (i + 1)) : '';
-      link.download = '价目表' + suffix + '.png';
-      link.href = canvas.toDataURL('image/png');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+      await saveOrShareImage(canvas.toDataURL('image/png'), '价目表' + suffix + '.png');
       await new Promise(r => setTimeout(r, 250));
     }
   } catch (err) {
@@ -20807,6 +20954,13 @@ window.addEventListener('resize', () => {
   /* 字体大小黑点位置 */
   updateFontSizeDot();
 });
+
+/* --- 权限开关初始化 --- */
+(function initLicenseToggle() {
+  const on = isLicenseEnabled();
+  if ($('licenseToggle')) $('licenseToggle').checked = on;
+  applyLicenseMode(on);
+})();
 
 /* --- 初始添加一个稿件组 --- */
 addGroup();
