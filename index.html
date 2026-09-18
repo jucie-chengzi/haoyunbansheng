@@ -405,6 +405,46 @@
                 <button class="rs-btn-sm ghost" onclick="clearReceiptImg('footer')">清除</button>
               </div>
               <p class="rs-tip-sm">大图会自动压缩后保存 · 点按钮进入编辑态：图片上任意位置可拖，右下角红点等比缩放，边缘虚线可拉伸</p>
+              <label>字体（中英文统一）</label>
+              <select id="rsFont" onchange="applyReceiptSettings()">
+                <option value="system">系统默认（思源黑体）</option>
+                <option value="'Source Han Sans SC','Noto Sans SC',sans-serif">思源黑体</option>
+                <option value="'Source Han Serif SC','Noto Serif SC','Songti SC',serif">思源宋体</option>
+                <option value="'Slideyouran','Yanshi Youran Xiaokai',cursive">演示悠然小楷（在线）</option>
+                <option value="'Playball',cursive">Playball（在线 · 英文）</option>
+                <option value="'Alex Brush',cursive">Alex Brush（在线 · 英文花体）</option>
+              </select>
+              <p class="rs-tip-sm">
+                演示悠然小楷、Playball、Alex Brush 通过 CDN 在线加载。<br>
+                以上字体均免费可商用。<br>
+                其它字体请用下方「导入本地字体」上传。请使用可商字体。
+              </p>
+
+              <label>字体大小</label>
+              <div class="range-row">
+                <div class="range-with-dot">
+                  <input type="range" id="rsFontSize" min="8" max="24" step="0.5" value="13.5" oninput="onFontSizeChanged()" />
+                  <button type="button" class="range-default-dot" onclick="resetFontSize()" title="点击恢复默认字体大小 13.5px"></button>
+                </div>
+                <span class="range-val" id="rsFontSizeVal">13.5px</span>
+              </div>
+              <p class="rs-tip-sm">
+                调整小票整体文字大小（不含票头 / 票尾）。<br>
+                黑点为默认大小，点击可恢复。
+              </p>
+
+              <label>导入本地字体（TTF / OTF / WOFF / WOFF2）</label>
+              <div class="rs-file-row">
+                <label class="upload-btn" for="rsFontFileInput">＋ 选择字体文件</label>
+                <input type="file" id="rsFontFileInput" class="file-input"
+                       accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2">
+                <button class="rs-btn-sm ghost" onclick="clearLocalFonts()">清空已导入</button>
+              </div>
+              <p class="rs-tip-sm" id="rsFontUploadStatus">
+                字体文件受版权与容量限制，仅保存在当前浏览器，换设备或清缓存需重新导入。
+              </p>
+
+              <div class="custom-font-list" id="customFontList"></div>
             </div>
 
             <div class="rs-pane" id="rsPaneStyle">
@@ -500,46 +540,6 @@
                 <span class="range-val" id="rsBgOpacityVal">100%</span>
               </div>
 
-              <label>字体（中英文统一）</label>
-              <select id="rsFont" onchange="applyReceiptSettings()">
-                <option value="system">系统默认（思源黑体）</option>
-                <option value="'Source Han Sans SC','Noto Sans SC',sans-serif">思源黑体</option>
-                <option value="'Source Han Serif SC','Noto Serif SC','Songti SC',serif">思源宋体</option>
-                <option value="'Slideyouran','Yanshi Youran Xiaokai',cursive">演示悠然小楷（在线）</option>
-                <option value="'Playball',cursive">Playball（在线 · 英文）</option>
-                <option value="'Alex Brush',cursive">Alex Brush（在线 · 英文花体）</option>
-              </select>
-              <p class="rs-tip-sm">
-                演示悠然小楷、Playball、Alex Brush 通过 CDN 在线加载。<br>
-                以上字体均免费可商用。<br>
-                其它字体请用下方「导入本地字体」上传。请使用可商字体。
-              </p>
-
-              <label>字体大小</label>
-              <div class="range-row">
-                <div class="range-with-dot">
-                  <input type="range" id="rsFontSize" min="8" max="24" step="0.5" value="13.5" oninput="onFontSizeChanged()" />
-                  <button type="button" class="range-default-dot" onclick="resetFontSize()" title="点击恢复默认字体大小 13.5px"></button>
-                </div>
-                <span class="range-val" id="rsFontSizeVal">13.5px</span>
-              </div>
-              <p class="rs-tip-sm">
-                调整小票整体文字大小（不含票头 / 票尾）。<br>
-                黑点为默认大小，点击可恢复。
-              </p>
-
-              <label>导入本地字体（TTF / OTF / WOFF / WOFF2）</label>
-              <div class="rs-file-row">
-                <label class="upload-btn" for="rsFontFileInput">＋ 选择字体文件</label>
-                <input type="file" id="rsFontFileInput" class="file-input"
-                       accept=".ttf,.otf,.woff,.woff2,font/ttf,font/otf,font/woff,font/woff2">
-                <button class="rs-btn-sm ghost" onclick="clearLocalFonts()">清空已导入</button>
-              </div>
-              <p class="rs-tip-sm" id="rsFontUploadStatus">
-                导入的字体仅在当前浏览器会话中有效，刷新后需重新导入。
-              </p>
-
-              <div class="custom-font-list" id="customFontList"></div>
             </div>
           </div>
         </aside>

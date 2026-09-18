@@ -25,7 +25,7 @@
 /* ══════════ [U-01] 全局常量 / 存储 key ══════════ */
 
 /* ---- 应用版本（用于更新公告） ---- */
-const APP_VERSION = '1.1.2';
+const APP_VERSION = '1.1.3';
 const ANNOUNCEMENT_SEEN_KEY = 'listReceiptAnnouncementSeen';
 
 /* ---- 数据版本 + 迁移 ---- */
@@ -3431,7 +3431,22 @@ function setupFontFileInput() {
       const fontFace = new FontFace(familyName, `url(${dataUrl})`);
       await fontFace.load();
       document.fonts.add(fontFace);
-      registeredFonts.set(familyName, { fontFace, fileName: file.name });
+            registeredFonts.set(familyName, { fontFace, fileName: file.name });
+      
+      // ★ 新增：把字体文件存进 IndexedDB（本地文件柜）
+      try {
+        const fontRecord = {
+          id: 'local_font_' + familyName,
+          blob: file,
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          createdAt: Date.now()
+        };
+        await idbPutFile(fontRecord);
+      } catch (err) {
+        console.warn('字体存入 IndexedDB 失败', err);
+      }
 
       const sel = $('rsFont');
       if (sel) {
@@ -3474,7 +3489,46 @@ function readFileAsDataURL(file) {
     reader.readAsDataURL(file);
   });
 }
-
+/* ★ 新增：从 IndexedDB 恢复本地字体 */
+async function restoreLocalFontsFromIDB() {
+  if (!isIDBAvailable()) return;
+  try {
+    const keys = await idbListFileKeys();
+    const fontKeys = keys.filter(k => String(k).indexOf('local_font_') === 0);
+    for (const key of fontKeys) {
+      const rec = await idbGetFile(key);
+      if (!rec || !rec.blob) continue;
+      
+      const familyName = String(key).replace('local_font_', '');
+      
+      // 如果内存里已经有了，跳过
+      if (registeredFonts.has(familyName)) continue;
+      
+      try {
+        const dataUrl = await blobToDataURL(rec.blob);
+        const fontFace = new FontFace(familyName, `url(${dataUrl})`);
+        await fontFace.load();
+        document.fonts.add(fontFace);
+        registeredFonts.set(familyName, { fontFace, fileName: rec.name || familyName });
+        
+        // 把选项加进下拉框
+        const sel = $('rsFont');
+        if (sel && !Array.from(sel.options).some(o => o.value === familyName)) {
+          const opt = document.createElement('option');
+          opt.value = familyName;
+          opt.textContent = '📎 ' + (rec.name ? rec.name.replace(/\.[^.]+$/, '') : familyName) + '（本地恢复）';
+          sel.appendChild(opt);
+        }
+      } catch (err) {
+        console.warn('恢复字体失败：' + familyName, err);
+      }
+    }
+    renderCustomFontList();
+    setFontUploadStatus('已自动恢复上次导入的字体', 'success');
+  } catch (e) {
+    console.warn('恢复本地字体出错', e);
+  }
+}
 function renderCustomFontList() {
   const box = $('customFontList');
   if (!box) return;
@@ -3497,7 +3551,8 @@ function removeLocalFont(familyName) {
   if (!item) return;
   try { document.fonts.delete(item.fontFace); } catch (e) {}
   registeredFonts.delete(familyName);
-
+  // ★ 新增：同时从 IndexedDB 删除
+  idbDeleteFile('local_font_' + familyName).catch(() => {});
   const sel = $('rsFont');
   if (sel) {
     const opts = Array.from(sel.options);
@@ -3519,7 +3574,7 @@ function removeLocalFont(familyName) {
 
 function clearLocalFonts() {
   if (!registeredFonts.size) {
-    setFontUploadStatus('当前没有导入的本地字体。', 'info');
+    setFontUploadStatus('字体文件受版权与容量限制，仅保存在当前浏览器，换设备或清缓存需重新导入。', 'info');
     return;
   }
   if (!confirm('确定清空所有已导入的本地字体吗？')) return;
@@ -4096,12 +4151,14 @@ function generate() {
           ${showLicense ? `<td class="c">${licenseText(r.license)}</td>` : ''}
           <td class="r">${fmt(r.itemSubtotal)}</td></tr>`;
 
-        /* 基础行 */
-        html += `<tr class="part-row"><td><div style="padding-left:14px;">└ 基础</div></td>
-          <td class="r"><span class="sub">${fmt(r.price)}</span></td>
-          <td class="c"><span class="sub">${r.qty}件</span></td>
-          ${showLicense ? `<td class="c"><span class="sub">${licenseText(r.license)}</span></td>` : ''}
-          <td class="r"><span class="sub">${fmt(r.price * r.qty * r.m)}</span></td></tr>`;
+        /* 基础行（只有在有增项或节点时才显示） */
+        if (r.addons.length > 0 || r.nodes.length > 0) {
+          html += `<tr class="part-row"><td><div style="padding-left:14px;">└ 基础</div></td>
+            <td class="r"><span class="sub">${fmt(r.price)}</span></td>
+            <td class="c"><span class="sub">${r.qty}件</span></td>
+            ${showLicense ? `<td class="c"><span class="sub">${licenseText(r.license)}</span></td>` : ''}
+            <td class="r"><span class="sub">${fmt(r.price * r.qty * r.m)}</span></td></tr>`;
+        }
 
         /* 增项（└ 前缀区分） */
         r.addons.forEach(x => {
@@ -15900,19 +15957,18 @@ var USER_MANUAL_MODULES = [
           </ul>
         `
       },
-      {
+            {
         title: '小票设置',
         html: `
           <p>点小票右上角的<strong>画笔图标</strong>打开右侧设置面板，可以：</p>
           <ul>
-            <li>上传票头 / 票尾 / 背景图，支持拖拽、缩放、拉伸</li>
-            <li>修改背景色、字体主色 / 辅色</li>
-            <li>选择字体（含内置在线字体、可导入本地字体）</li>
-            <li>调整整体字号（黑点是默认值，点击恢复）</li>
+            <li>在「基础」标签页：上传票头 / 票尾 / 背景图，支持拖拽、缩放、拉伸</li>
+            <li>在「基础」标签页：选择字体（含内置在线字体、可导入本地字体）、调整整体字号（黑点为默认值，点击恢复）</li>
+            <li>在「样式」标签页：修改背景色、字体主色 / 辅色</li>
             <li>保存 / 加载小票预设（最多 5 个）</li>
           </ul>
         `
-      }
+      },
     ]
   },
   {
@@ -16100,8 +16156,8 @@ var USER_MANUAL_MODULES = [
       {
         title: '本地字体刷新后消失了？',
         html: `
-          <p>本地字体通过 FontFace API 临时加载，仅在当前浏览器会话有效。</p>
-          <p>刷新页面后需要重新导入。如需长期使用，建议改用系统自带字体，或每次打开前手动导入。</p>
+          <p>现在导入的本地字体<strong>已经会自动保存</strong>，刷新网页或重新打开都不会丢失。</p>
+          <p>但受浏览器限制与版权容量考量，字体文件仅保存在当前设备的浏览器中。换设备或清理浏览器缓存后，需要重新导入。</p>
         `
       },
       {
@@ -16827,6 +16883,18 @@ const ANNOUNCEMENTS = {
         <li>修复 iOS 手机保存小票无反应的问题，现在会弹出系统分享，选择「存储图像」即可保存到相册。</li>
       </ul>
       <p style="margin-top:12px;">已有数据不受影响，无需手动处理。</p>
+    `,
+  },
+    '1.1.3': {
+    title: '体验优化与问题修复',
+    html: `
+      <ul style="padding-left:20px;line-height:1.85;">
+        <li>修复小票基础价重复显示的问题（无增项/节点时不再显示多余的基础行）。</li>
+        <li>导入的本地字体现在会保存在浏览器中，刷新页面后无需重新导入。</li>
+        <li>优化字体导入提示，明确本地字体受版权与容量限制，仅限当前设备浏览器使用。</li>
+        <li>调整「小票设置」布局，字体相关设置移至「基础」标签页，操作更顺手。</li>
+      </ul>
+      <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
     `,
   },
 };
@@ -21062,7 +21130,10 @@ function finalizeFontDot() {
   })();
 
   /* 6. 字体黑点位置 */
-  finalizeFontDot();
+    finalizeFontDot();
+
+  // ★ 新增：从 IndexedDB 恢复本地字体
+  restoreLocalFontsFromIDB();
 
   /* 7. 渲染首页宠语 */
   renderHomeGreeting();
