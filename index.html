@@ -127,6 +127,12 @@
                 <label>接单平台</label>
                 <select id="platform"></select>
 
+                <label>画师 / 美工 <span class="required-mark">*</span></label>
+                <div class="artist-id-wrap">
+                  <select id="artistIdentity" class="artist-identity-select"></select>
+                  <input id="artistId" class="artist-id-input" data-required="1" placeholder="填写ID" />
+                </div>
+
                 <label>单主ID <span class="required-mark">*</span></label>
                 <div class="client-id-wrap">
                   <input id="client" data-required="1" />
@@ -143,6 +149,8 @@
 
                 <label>企划名称</label>
                 <input id="project" />
+                <label>IP</label>
+                <input id="ip" placeholder="如：爱情公寓（可留空）" />
                 <label>属性</label>
                 <input id="attribute" placeholder="填写属性名称" />
                 <label>角色</label>
@@ -165,7 +173,15 @@
                   <option value="percent">百分比 %</option>
                   <option value="amount">固定金额 ¥</option>
                 </select>
-                <label>定金（占位单：排单费）</label>
+                <div class="deposit-label-row">
+                  <label>定金（占位单：排单费）</label>
+                  <label class="switch-wrap" title="关闭后不计算定金，预付款按 0 计">
+                    <span class="switch">
+                      <input type="checkbox" id="depositEnabled" checked onchange="onDepositEnabledToggle()" />
+                      <span class="switch-slider"></span>
+                    </span>
+                  </label>
+                </div>
                 <div class="input-unit-wrap suffix" id="depositWrap">
                   <input id="deposit" type="number" step="0.01" value="20" />
                   <span class="input-unit" id="depositUnit">%</span>
@@ -189,6 +205,7 @@
           <section class="panel" id="detailGroupPanel">
             <div class="section-head-row">
               <h2 class="section-title" style="flex:1;margin:0 0 14px;">定制细则</h2>
+              <button type="button" class="algo-btn-inline" onclick="openAlgorithmSettings()" style="margin-right:12px;">算法</button>
               <label class="switch-wrap" title="关闭后，稿件不需要选权限，小票中也不显示权限列" style="margin-right:12px;">
                 <span class="switch-label-text">权限</span>
                 <span class="switch">
@@ -210,17 +227,28 @@
 
           <section class="panel" id="orderExtrasPanel">
             <h2 class="section-title">其他</h2>
-            <label style="margin-top:0;">订单级附加费用（基于订单总价）</label>
+            <label style="margin-top:0;">订单级附加费用</label>
             <div id="extrasContainer" class="order-extras"></div>
             <button class="add-item-btn" onclick="addExtra()">+ 添加总附加费用</button>
 
-            <label>优惠（基于订单总价）</label>
+            <label>订单级优惠折扣</label>
             <div id="discountsContainer" class="order-extras"></div>
             <button class="add-item-btn" onclick="addDiscount()">+ 添加总优惠折扣</button>
 
             <label>赠品（不计入应付）</label>
             <div id="giftsContainer"></div>
             <button class="add-item-btn" onclick="addGift()">+ 添加赠品</button>
+
+            <div class="order-fee-row">
+              <button type="button" class="order-fee-btn" id="prepaidBtn" onclick="openPrepaidModal()">
+                <span class="order-fee-btn-label">预付金额</span>
+                <span class="order-fee-btn-state" id="prepaidBtnState"></span>
+              </button>
+              <button type="button" class="order-fee-btn" id="orderServiceBtn" onclick="openOrderServiceModal()">
+                <span class="order-fee-btn-label">总服务费</span>
+                <span class="order-fee-btn-state" id="orderServiceBtnState"></span>
+              </button>
+            </div>
           </section>
 
           <section class="panel">
@@ -292,6 +320,7 @@
                 <hr class="rule double" />
 
                 <div class="info-row bold" id="rowProject"><span class="k">企划名</span><span id="outProject"></span></div>
+                <div class="info-row bold" id="rowIP"><span class="k">IP</span><span id="outIP"></span></div>
                 <div class="info-row bold" id="rowAttribute"><span class="k">属性</span><span id="outAttribute"></span></div>
                 <div class="info-row bold" id="rowCharacter"><span class="k">角色</span><span id="outCharacter"></span></div>
 
@@ -303,14 +332,23 @@
 
                 <hr class="rule" />
                 <div class="totals order-totals">
-                  <div class="row"><span>订单总价</span><span id="outTotal"></span></div>
+                  <div class="row"><span>总合计</span><span id="outSubtotalTotal"></span></div>
                   <div class="row" id="outOrderExtrasRow" style="display:none">
-                    <span id="outOrderExtrasLabel">订单总附加费用</span>
+                    <span id="outOrderExtrasLabel">总附加费用</span>
                     <span id="outOrderExtras"></span>
                   </div>
                   <div class="row" id="outOrderDiscountRow" style="display:none">
-                    <span id="outOrderDiscountLabel">订单总优惠折扣</span>
+                    <span id="outOrderDiscountLabel">总优惠折扣</span>
                     <span id="outOrderDiscount"></span>
+                  </div>
+                  <div class="row"><span>订单总价</span><span id="outTotal"></span></div>
+                  <div class="row order-fee-sub" id="outOrderServiceRow" style="display:none">
+                    <span id="outOrderServiceLabel">服务费</span>
+                    <span id="outOrderService"></span>
+                  </div>
+                  <div class="row order-fee-sub" id="outOrderChannelRow" style="display:none">
+                    <span id="outOrderChannelLabel">通道费</span>
+                    <span id="outOrderChannel"></span>
                   </div>
                 </div>
 
@@ -371,6 +409,7 @@
           <div class="rs-tabs">
             <button class="rs-tab active" data-tab="basic" onclick="switchRsTab('basic')">基础</button>
             <button class="rs-tab" data-tab="style" onclick="switchRsTab('style')">样式</button>
+            <button class="rs-tab" data-tab="content" onclick="switchRsTab('content')">内容</button>
           </div>
 
           <div class="rs-body">
@@ -540,6 +579,30 @@
                 <span class="range-val" id="rsBgOpacityVal">100%</span>
               </div>
 
+            </div>
+                        <div class="rs-pane" id="rsPaneContent">
+              <button type="button" class="rs-smart-btn" onclick="applySmartSimple()">智能简洁</button>
+              <p class="rs-tip-sm">点一下切换到简洁模式（隐藏中间量），可手动再调整下方开关。</p>
+
+              <label style="margin-top:20px;">显示选项（默认全部开启）</label>
+
+              <label class="rs-check-row">
+                <input type="checkbox" id="rsShowGroupOriginal" onchange="onContentSettingChange()" />
+                <span>组原价</span>
+              </label>
+              <label class="rs-check-row">
+                <input type="checkbox" id="rsShowGroupSubtotal" onchange="onContentSettingChange()" />
+                <span>组小计</span>
+              </label>
+              <label class="rs-check-row">
+                <input type="checkbox" id="rsShowOrderSubtotal" onchange="onContentSettingChange()" />
+                <span>总合计</span>
+              </label>
+
+              <p class="rs-tip-sm" style="margin-top:16px;">
+                <strong>永远显示</strong>：稿件明细、组合计、订单总价、应付金额。<br>
+                <strong>有值才显示</strong>：附加、折扣、服务费、预付、待结。
+              </p>
             </div>
           </div>
         </aside>
@@ -805,7 +868,10 @@
     <section class="page" id="pageTodoDetail">
       <div class="page-head todo-detail-head">
         <div class="todo-detail-title-row">
-          <h1 id="tdTitle">订单详情</h1>
+          <div style="flex:1;min-width:0;">
+            <h1 id="tdTitle">订单详情</h1>
+            <div id="tdOrderNo" class="order-no-line" style="display:none;"></div>
+          </div>
           <button class="action-btn ghost td-mini-btn" id="tdEditBtn" onclick="toggleTodoEdit()">编辑</button>
           <button class="action-btn td-mini-btn" id="tdSaveBtn" onclick="saveTodoDetail()" style="display:none;">保存</button>
         </div>
@@ -1025,6 +1091,13 @@
           <span class="ticket-folder-count" id="ticketFolderCount"></span>
         </div>
         <div class="ticket-folder-head-right">
+          <button type="button" class="order-filter-btn" onclick="openTicketFilterModal()" title="筛选小票">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 5 H21 L14 13 V20 L10 18 V13 Z"/>
+            </svg>
+            <span>筛选</span>
+          </button>
+          <button type="button" class="order-manage-btn" id="ticketManageBtn" onclick="toggleTicketManageMode()">管理</button>
           <button type="button" class="action-btn ghost td-mini-btn" id="ticketFolderSortBtn" onclick="toggleTicketFolderSort()" title="切换排序">最新优先</button>
           <button type="button" class="action-btn ghost td-mini-btn" onclick="backFromTicketFolder()">← 返回</button>
         </div>
@@ -1035,6 +1108,17 @@
           <input id="ticketFolderSearch" class="ticket-folder-search"
                  placeholder="搜索单主 ID / 联系方式 / 日期"
                  oninput="renderTicketFolder()" />
+        </div>
+
+        <div class="order-manage-bar" id="ticketManageBar" style="display:none;">
+          <div class="order-manage-bar-left">
+            <span id="ticketSelectedCount">已选择 0 张</span>
+          </div>
+          <div class="order-manage-bar-right">
+            <button type="button" class="order-manage-bar-btn ghost" onclick="toggleAllTicketSelect()" id="ticketSelectAllBtn">全选</button>
+            <button type="button" class="order-manage-bar-btn danger" onclick="confirmTicketBatchDelete()" id="ticketBatchDeleteBtn" disabled>删除</button>
+            <button type="button" class="order-manage-bar-btn ghost" onclick="exitTicketManageMode()">完成</button>
+          </div>
         </div>
 
         <div class="ticket-folder-grid" id="ticketFolderGrid"></div>

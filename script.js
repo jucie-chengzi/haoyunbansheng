@@ -25,7 +25,7 @@
 /* ══════════ [U-01] 全局常量 / 存储 key ══════════ */
 
 /* ---- 应用版本（用于更新公告） ---- */
-const APP_VERSION = '1.1.3';
+const APP_VERSION = '1.1.4';
 const ANNOUNCEMENT_SEEN_KEY = 'listReceiptAnnouncementSeen';
 
 /* ---- 数据版本 + 迁移 ---- */
@@ -199,24 +199,31 @@ function makeOrderNo(orderDate) {
   return 'NO.' + ymd + randomTwoDigit();
 }
 
-function makeUniqueId(prefix) {
-  return (prefix || 'id') + '_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+/* ★ 全局自增计数器：保证同一毫秒内多次调用也不会生成重复 id */
+var __idSeqCounter = 0;
+function __nextIdSeq() {
+  __idSeqCounter = (__idSeqCounter + 1) % 1000000;
+  return __idSeqCounter;
 }
 
-function makeTodoId()   { return 'todo_'   + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeItemId()   { return 'item_'   + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeFileId()   { return 'file_'   + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeRecordId() { return 'rec_'    + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeFlowId()   { return 'flow_'   + Date.now() + '_' + Math.floor(Math.random() * 1000); }
+function makeUniqueId(prefix) {
+  return (prefix || 'id') + '_' + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000);
+}
 
-function makeCompletedId() { return 'done_'    + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeCancelledId() { return 'cancel_'  + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeDiscardedId() { return 'discard_' + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makeMemoId()      { return 'memo_'    + Date.now() + '_' + Math.floor(Math.random() * 1000); }
+function makeTodoId()   { return 'todo_'   + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeItemId()   { return 'item_'   + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeFileId()   { return 'file_'   + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeRecordId() { return 'rec_'    + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeFlowId()   { return 'flow_'   + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
 
-function makeReceiptPresetId() { return 'rp_' + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makePresetGroupId()   { return 'pg_' + Date.now() + '_' + Math.floor(Math.random() * 1000); }
-function makePriceListPresetId() { return 'plp_' + Date.now() + '_' + Math.floor(Math.random() * 1000); }
+function makeCompletedId() { return 'done_'    + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeCancelledId() { return 'cancel_'  + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeDiscardedId() { return 'discard_' + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makeMemoId()      { return 'memo_'    + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+
+function makeReceiptPresetId() { return 'rp_' + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makePresetGroupId()   { return 'pg_' + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
+function makePriceListPresetId() { return 'plp_' + Date.now() + '_' + __nextIdSeq() + '_' + Math.floor(Math.random() * 1000); }
 
 
 /* ══════════ [U-06] 联系方式格式 ══════════ */
@@ -845,6 +852,10 @@ function addCompleted(obj) {
     id: makeCompletedId(),
     createdAt: Date.now(),
   }, obj);
+  if (!rec.orderNo && rec.todoId) {
+    const t = getTodos().find(x => x.id === rec.todoId);
+    if (t && t.orderNo) rec.orderNo = t.orderNo;
+  }
   list.push(rec);
   if (!setCompleted(list)) return null;
   return rec;
@@ -867,6 +878,13 @@ function addCancelled(obj) {
     id: makeCancelledId(),
     createdAt: Date.now(),
   }, obj);
+  /* 撤单不保存小票图片（省内存） */
+  rec.receiptImage = '';
+  rec.receiptSnapshot = null;
+  if (!rec.orderNo && rec.todoId) {
+    const t = getTodos().find(x => x.id === rec.todoId);
+    if (t && t.orderNo) rec.orderNo = t.orderNo;
+  }
   list.push(rec);
   if (!setCancelled(list)) return null;
   return rec;
@@ -889,6 +907,13 @@ function addDiscarded(obj) {
     id: makeDiscardedId(),
     createdAt: Date.now(),
   }, obj);
+  /* 废稿不保存小票图片（省内存） */
+  rec.receiptImage = '';
+  rec.receiptSnapshot = null;
+  if (!rec.orderNo && rec.todoId) {
+    const t = getTodos().find(x => x.id === rec.todoId);
+    if (t && t.orderNo) rec.orderNo = t.orderNo;
+  }
   list.push(rec);
   if (!setDiscarded(list)) return null;
   return rec;
@@ -1535,6 +1560,223 @@ function backupAllDataBeforeRepair() {
         算出差额，把缺的部分补成一条新流水。
    幂等：重复调用不会重复累加（每次先算已存在的总额）。
    ═══════════════════════════════════════════════════════ */
+/* [M-04B] 修复：ID / 缺失字段 / 找出需要重生成小票的订单 */
+/* 重新生成单个待办订单的小票图片（借用真实小票 DOM 在屏幕外截图） */
+async function regenerateOneTodoReceipt(todo) {
+  const receiptEl = $('receipt');
+  if (!receiptEl) return '';
+
+  const backupSnap = captureReceiptFormSnapshot();
+  const backupEditingId = window.__editingTodoId;
+  const backupOrderNo = window.__currentOrderNo;
+  const backupGenerated = window.__receiptGenerated;
+  const backupImported = window.__receiptImported;
+  const backupWarnIgnore = window.__receiptWarnIgnore;
+
+  const originalParent = receiptEl.parentNode;
+  const originalNextSibling = receiptEl.nextSibling;
+  let offscreen = null;
+
+  try {
+    if (todo.receiptSnapshot) restoreReceiptFormSnapshot(todo.receiptSnapshot);
+    const layout = $('receiptLayout');
+    if (layout) layout.classList.remove('settings-open');
+
+    try { generate(); } catch (e) { console.warn('generate 失败', e); }
+    await new Promise(r => requestAnimationFrame(r));
+
+    offscreen = document.createElement('div');
+    offscreen.style.cssText = 'position:fixed;left:-99999px;top:0;width:560px;background:#fff;pointer-events:none;z-index:-1;';
+    document.body.appendChild(offscreen);
+    offscreen.appendChild(receiptEl);
+
+    if (typeof waitForImagesIn === 'function') {
+      await waitForImagesIn(receiptEl, 1500);
+    }
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 80));
+
+    const handleState = hideAllReceiptHandles();
+    const canvas = await html2canvas(receiptEl, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+    });
+    restoreAllReceiptHandles(handleState);
+    const dataUrl = canvas.toDataURL('image/png');
+
+    const blob = dataURLToBlob(dataUrl);
+    if (!blob) return '';
+    return (await saveImageBlob(blob, 'receipt_' + (todo.orderNo || '') + '.png')) || '';
+  } catch (e) {
+    console.warn('重生成小票失败', e);
+    return '';
+  } finally {
+    try {
+      if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
+        originalParent.insertBefore(receiptEl, originalNextSibling);
+      } else {
+        originalParent.appendChild(receiptEl);
+      }
+    } catch (e) {}
+    if (offscreen && offscreen.parentNode) offscreen.parentNode.removeChild(offscreen);
+
+    try {
+      restoreReceiptFormSnapshot(backupSnap);
+      window.__editingTodoId = backupEditingId;
+      window.__currentOrderNo = backupOrderNo;
+      try { generate(); } catch (e) {}
+    } catch (e) {}
+
+    window.__receiptGenerated = backupGenerated;
+    window.__receiptImported = backupImported;
+    window.__receiptWarnIgnore = backupWarnIgnore;
+  }
+}
+
+/* 批量重生成小票，onProgress(current, total) 每完成一个回调一次 */
+async function regenerateTodosReceipts(todoIds, onProgress) {
+  if (!Array.isArray(todoIds) || !todoIds.length) return { done: 0, failed: 0 };
+
+  const todos = getTodos();
+  let done = 0, failed = 0;
+
+  for (let i = 0; i < todoIds.length; i++) {
+    const id = todoIds[i];
+    const idx = todos.findIndex(x => x.id === id);
+    if (idx < 0) {
+      if (typeof onProgress === 'function') onProgress(i + 1, todoIds.length);
+      continue;
+    }
+    const t = todos[idx];
+
+    try {
+      const newRef = await regenerateOneTodoReceipt(t);
+      if (newRef) {
+        const oldRef = t.receiptImage;
+        t.receiptImage = newRef;
+        if (oldRef && oldRef !== newRef) {
+          try { await deleteImageRef(oldRef); } catch (e) {}
+        }
+        done++;
+      } else {
+        failed++;
+      }
+    } catch (e) {
+      failed++;
+    }
+
+    if (typeof onProgress === 'function') {
+      onProgress(i + 1, todoIds.length);
+    }
+  }
+
+  setTodos(todos);
+  return { done, failed };
+}
+
+function repairAllData() {
+  const result = {
+    fixedItems: 0,     /* 修复的 item id 数 */
+    fixedOrders: 0,    /* 处理过的订单数 */
+    needRegenIds: [],  /* 需要重新生成小票的待办订单 id */
+  };
+
+  /* ========== 1. 待办订单 ========== */
+  const todos = getTodos();
+  let todosChanged = false;
+
+  todos.forEach(t => {
+    if (!t) return;
+    let thisChanged = false;
+
+    /* 1a. items 的 id */
+    if (Array.isArray(t.items)) {
+      const seen = {};
+      t.items.forEach(it => {
+        if (!it) return;
+        if (!it.id || seen[it.id]) {
+          it.id = makeItemId();
+          result.fixedItems++;
+          thisChanged = true;
+        }
+        seen[it.id] = true;
+      });
+    }
+
+    /* 1b. orderNo */
+    let justGotOrderNo = false;
+    if (!t.orderNo) {
+      t.orderNo = makeOrderNo(t.orderDate || fmtDateStr(new Date()));
+      thisChanged = true;
+      justGotOrderNo = true;
+    }
+
+    /* 1c. 快照缺失字段 */
+    if (t.receiptSnapshot && typeof t.receiptSnapshot === 'object') {
+      const snap = t.receiptSnapshot;
+      if (snap.ip === undefined)                { snap.ip = ''; thisChanged = true; }
+      if (snap.attribute === undefined)         { snap.attribute = ''; thisChanged = true; }
+      if (snap.algorithmSettings === undefined) {
+        snap.algorithmSettings = Object.assign({}, DEFAULT_ALGORITHM_SETTINGS);
+        thisChanged = true;
+      }
+      if (snap.depositEnabled === undefined)    { snap.depositEnabled = true; thisChanged = true; }
+      if (snap.prepaidConfig === undefined)     {
+        snap.prepaidConfig = { enabled: true, customAmount: null };
+        thisChanged = true;
+      }
+      if (snap.orderServiceFee === undefined)   { snap.orderServiceFee = null; thisChanged = true; }
+    }
+
+    /* 1d. 判断是否需要重新生成小票：
+       只有当"这次刚补了 orderNo"且"有快照有图"才需要 */
+    if (justGotOrderNo && t.receiptSnapshot && t.receiptImage) {
+      result.needRegenIds.push(t.id);
+    }
+
+    if (thisChanged) {
+      t.updatedAt = Date.now();
+      result.fixedOrders++;
+      todosChanged = true;
+    }
+  });
+
+  if (todosChanged) setTodos(todos);
+
+  /* ========== 2. 已结单 / 撤单 / 废稿：只补字段，不动图片 ========== */
+  const lists = [
+    ['completed', getCompleted, setCompleted],
+    ['cancelled', getCancelled, setCancelled],
+    ['discarded', getDiscarded, setDiscarded],
+  ];
+
+  lists.forEach(pair => {
+    const list = pair[1]();
+    let changed = false;
+
+    list.forEach(rec => {
+      if (!rec) return;
+
+      /* 2a. orderNo */
+      if (!rec.orderNo) {
+        const d = rec.orderDate || rec.completedDate || rec.cancelledDate || rec.discardedDate || fmtDateStr(new Date());
+        rec.orderNo = makeOrderNo(d);
+        changed = true;
+      }
+
+      /* 2b. 快照里的 ip / attribute */
+      if (rec.receiptSnapshot && typeof rec.receiptSnapshot === 'object') {
+        if (rec.receiptSnapshot.ip === undefined)        { rec.receiptSnapshot.ip = ''; changed = true; }
+        if (rec.receiptSnapshot.attribute === undefined) { rec.receiptSnapshot.attribute = ''; changed = true; }
+      }
+    });
+
+    if (changed) pair[2](list);
+  });
+
+  return result;
+}
 
 function repairMissingFlows() {
   const todos = getTodos();
@@ -1834,9 +2076,12 @@ function repairData() {
             数据修复将：
           </p>
           <ul style="margin:0 0 12px;padding-left:20px;font-size:13px;color:var(--ink-soft);line-height:1.85;">
-            <li>把当前存档升级到最新规则（补字段、图片搬入 IndexedDB 等）</li>
-            <li>自动补录历史订单缺失的预付款 / 排单费 / 尾款流水</li>
-            <li>建立单主档案索引，让「单主」页面能自动读取历史订单</li>
+            <li>把当前存档升级到最新规则</li>
+            <li>修复重复 / 缺失的事项 ID（修完待办细则就能正常勾选）</li>
+            <li>给老订单补缺失的字段和订单编号</li>
+            <li>重新生成待办订单的小票（让编号跟卡片一致）</li>
+            <li>补录历史订单缺失的预付款 / 排单费 / 尾款流水</li>
+            <li>建立单主档案索引</li>
           </ul>
           <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;">
             修复前会自动备份，可重复点击不会重复累加。
@@ -1897,6 +2142,69 @@ async function doRepairData() {
   } catch (e) {
     ctx.report.push('图片搬迁失败：' + (e && e.message ? e.message : '未知'));
   }
+  /* 4. 修复 ID / 缺失字段 / 找出需重生成的订单 */
+  let idStats = { fixedItems: 0, fixedOrders: 0, needRegenIds: [] };
+  try {
+    idStats = repairAllData() || idStats;
+  } catch (e) {
+    ctx.report.push('修复 ID 出错：' + (e && e.message ? e.message : '未知'));
+  }
+
+  /* 4a. 重新生成小票（带进度弹窗） */
+  let regenStats = { done: 0, failed: 0 };
+
+  if (idStats.needRegenIds && idStats.needRegenIds.length > 0) {
+    const total = idStats.needRegenIds.length;
+
+    $('modalRoot').innerHTML = `
+      <div class="modal-overlay">
+        <div class="modal repair-progress-modal" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <h3>数据修复中</h3>
+          </div>
+          <div class="modal-body">
+            <div class="repair-progress-text" id="repairProgressText">
+              正在重新生成小票 0 / ${total} …
+            </div>
+            <div class="repair-progress-bar">
+              <div class="repair-progress-inner" id="repairProgressInner" style="width:0%"></div>
+            </div>
+            <p class="repair-progress-hint">请勿关闭页面或切换标签，稍等片刻…</p>
+          </div>
+        </div>
+      </div>`;
+
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 80));
+
+    try {
+      regenStats = await regenerateTodosReceipts(idStats.needRegenIds, function (cur, tot) {
+        const pct = Math.round(cur / tot * 100);
+        const txtEl = $('repairProgressText');
+        const barEl = $('repairProgressInner');
+        if (txtEl) txtEl.textContent = '正在重新生成小票 ' + cur + ' / ' + tot + ' …';
+        if (barEl) barEl.style.width = pct + '%';
+      }) || regenStats;
+    } catch (e) {
+      ctx.report.push('重生成小票出错：' + (e && e.message ? e.message : '未知'));
+    }
+
+    $('modalRoot').innerHTML = '';
+  }
+
+  /* 4b. 把结果写入报告 */
+  if (idStats.fixedItems > 0) {
+    ctx.report.push('修复 ID：' + idStats.fixedItems + ' 条事项');
+  }
+  if (idStats.fixedOrders > 0) {
+    ctx.report.push('补字段：' + idStats.fixedOrders + ' 个订单');
+  }
+  if (regenStats.done > 0) {
+    ctx.report.push('重新生成小票：' + regenStats.done + ' 张');
+  }
+  if (regenStats.failed > 0) {
+    ctx.report.push('小票生成失败：' + regenStats.failed + ' 张');
+  }
 
   /* 4. 补录流水 */
   let flowStats = { count: 0, amount: 0 };
@@ -1925,6 +2233,17 @@ async function doRepairData() {
 
   /* 7. 弹出结果 */
   let bodyHtml = '<p style="margin:6px 0 10px;font-weight:600;">数据修复完成</p>';
+
+  /* 修复详情（ID / 字段 / 小票） */
+  if (ctx.report.length > 0) {
+    bodyHtml += '<ul style="margin:0 0 10px;padding-left:20px;font-size:13px;color:var(--ink-soft);line-height:1.85;">';
+    ctx.report.forEach(line => {
+      bodyHtml += '<li>' + escapeHtml(line) + '</li>';
+    });
+    bodyHtml += '</ul>';
+  }
+
+  /* 概览 */
   bodyHtml += '<ul style="margin:0;padding-left:20px;font-size:13px;color:var(--ink-soft);line-height:1.85;">';
   bodyHtml += '<li>数据版本：v' + fromV + ' → v' + toV + '（迁移步骤 ' + migratedSteps + ' 个）</li>';
   if (flowStats.count > 0) {
@@ -1933,11 +2252,10 @@ async function doRepairData() {
     bodyHtml += '<li>流水无需补录</li>';
   }
   bodyHtml += '<li>单主档案：共 ' + masters.length + ' 位</li>';
-  ctx.report.forEach(line => {
-    bodyHtml += '<li>' + escapeHtml(line) + '</li>';
-  });
   bodyHtml += '</ul>';
-  bodyHtml += '<p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0;">可到「统计」页和「单主」页查看最新数据。</p>';
+
+  /* 提示 */
+  bodyHtml += '<p style="font-size:12px;color:var(--ink-soft);margin:10px 0 0;">修复前的备份已自动保存，可到「统计」页和「单主」页查看最新数据。</p>';
 
   $('modalRoot').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -2079,10 +2397,1000 @@ const FONT_SIZE_MAX = 24;
 
 
 /* ═══════════════════════════════════════════════════════
+   [ALG-01] 算法设置（组附加 / 组折扣 / 总附加 / 总折扣）
+   ═══════════════════════════════════════════════════════ */
+
+const ALGORITHM_KEY = 'listReceiptAlgorithmSettings';
+
+const ALGORITHM_OPTIONS = {
+  groupExtra: [
+    { key: 'groupOriginal', label: '组原价 × 系数', desc: '按组原价（不含用途比例）计算附加。', example: '组原价 1000，系数 10% → 附加 = 100' },
+    { key: 'groupSubtotal', label: '组小计 × 系数', desc: '按组小计（含用途比例）计算附加。（老算法默认）', example: '组小计 1500，系数 10% → 附加 = 150' },
+    { key: 'fixed',         label: '固定金额',      desc: '直接加一个固定数额。', example: '固定 50 → 附加 = 50' },
+  ],
+  groupDiscount: [
+    { key: 'groupOriginal',             label: '组原价 × 系数',             desc: '按组原价折扣。', example: '组原价 1000，系数 10% → 折扣 = 100' },
+    { key: 'groupSubtotal',             label: '组小计 × 系数',             desc: '按组小计折扣。', example: '组小计 1500，系数 10% → 折扣 = 150' },
+    { key: 'groupOriginalWithExtra',    label: '（组原价 + 组附加）× 系数', desc: '加价后再折扣，基数是组原价。', example: '组原价 1000 + 附加 100，系数 10% → 折扣 = 110' },
+    { key: 'groupSubtotalWithExtra',    label: '（组小计 + 组附加）× 系数', desc: '加价后再折扣，基数是组小计。（老算法默认）', example: '组小计 1500 + 附加 150，系数 10% → 折扣 = 165' },
+    { key: 'fixed',                     label: '固定金额',                  desc: '直接减一个固定数额。', example: '固定 50 → 折扣 = 50' },
+  ],
+  orderExtra: [
+    { key: 'sumGroupOriginal', label: '各组原价之和 × 系数', desc: '所有组原价相加作为基数。', example: '三组原价共 3000，系数 10% → 附加 = 300' },
+    { key: 'sumGroupSubtotal', label: '各组小计之和 × 系数', desc: '所有组小计相加作为基数。', example: '三组小计共 4000，系数 10% → 附加 = 400' },
+    { key: 'sumGroupTotal',    label: '各组合计之和 × 系数', desc: '所有组合计相加作为基数。（老算法默认）', example: '三组合计共 5000，系数 10% → 附加 = 500' },
+    { key: 'fixed',            label: '固定金额',            desc: '直接加一个固定数额。', example: '固定 100 → 附加 = 100' },
+  ],
+  orderDiscount: [
+    { key: 'sumGroupOriginal',          label: '各组原价之和 × 系数',              desc: '所有组原价相加作为基数。', example: '三组原价共 3000，系数 10% → 折扣 = 300' },
+    { key: 'sumGroupSubtotal',          label: '各组小计之和 × 系数',              desc: '所有组小计相加作为基数。', example: '三组小计共 4000，系数 10% → 折扣 = 400' },
+    { key: 'sumGroupTotal',             label: '各组合计之和 × 系数',              desc: '所有组合计相加作为基数。（老算法默认）', example: '三组合计共 5000，系数 10% → 折扣 = 500' },
+    { key: 'sumGroupOriginalWithExtra', label: '（各组原价之和 + 总附加）× 系数', desc: '加价后再折扣，基数是各组原价之和。', example: '各组原价 3000 + 总附加 300，系数 10% → 折扣 = 330' },
+    { key: 'sumGroupSubtotalWithExtra', label: '（各组小计之和 + 总附加）× 系数', desc: '加价后再折扣，基数是各组小计之和。', example: '各组小计 4000 + 总附加 400，系数 10% → 折扣 = 440' },
+    { key: 'sumGroupTotalWithExtra',    label: '（各组合计之和 + 总附加）× 系数', desc: '加价后再折扣，基数是各组合计之和。', example: '各组合计 5000 + 总附加 500，系数 10% → 折扣 = 550' },
+    { key: 'fixed',                     label: '固定金额',                        desc: '直接减一个固定数额。', example: '固定 100 → 折扣 = 100' },
+  ],
+};
+
+const DEFAULT_ALGORITHM_SETTINGS = {
+  groupExtra:    'groupSubtotal',
+  groupDiscount: 'groupSubtotalWithExtra',
+  orderExtra:    'sumGroupTotal',
+  orderDiscount: 'sumGroupTotal',
+};
+
+function getAlgorithmSettings() {
+  const stored = safeLSGet(ALGORITHM_KEY, null,
+    v => v && typeof v === 'object');
+  if (!stored) return Object.assign({}, DEFAULT_ALGORITHM_SETTINGS);
+  return Object.assign({}, DEFAULT_ALGORITHM_SETTINGS, stored);
+}
+
+function setAlgorithmSettings(obj) {
+  return safeLSSet(ALGORITHM_KEY, obj);
+}
+
+function calcGroupExtraBase(algKey, groupOriginal, groupSubtotal) {
+  if (algKey === 'groupOriginal') return groupOriginal;
+  return groupSubtotal;
+}
+
+function calcGroupDiscountBase(algKey, groupOriginal, groupSubtotal, groupExtra) {
+  switch (algKey) {
+    case 'groupOriginal':          return groupOriginal;
+    case 'groupSubtotal':          return groupSubtotal;
+    case 'groupOriginalWithExtra': return groupOriginal + groupExtra;
+    case 'groupSubtotalWithExtra': return groupSubtotal + groupExtra;
+    default:                       return groupSubtotal;
+  }
+}
+
+function calcOrderExtraBase(algKey, sumOriginal, sumSubtotal, sumTotal) {
+  switch (algKey) {
+    case 'sumGroupOriginal': return sumOriginal;
+    case 'sumGroupSubtotal': return sumSubtotal;
+    case 'sumGroupTotal':    return sumTotal;
+    default:                 return sumTotal;
+  }
+}
+
+function calcOrderDiscountBase(algKey, sumOriginal, sumSubtotal, sumTotal, orderExtra) {
+  switch (algKey) {
+    case 'sumGroupOriginal':          return sumOriginal;
+    case 'sumGroupSubtotal':          return sumSubtotal;
+    case 'sumGroupTotal':             return sumTotal;
+    case 'sumGroupOriginalWithExtra': return sumOriginal + orderExtra;
+    case 'sumGroupSubtotalWithExtra': return sumSubtotal + orderExtra;
+    case 'sumGroupTotalWithExtra':    return sumTotal + orderExtra;
+    default:                          return sumTotal;
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   [ALG-02] 算法设置弹窗
+   ═══════════════════════════════════════════════════════ */
+
+var __algoDraft = null;
+
+function openAlgorithmSettings() {
+  __algoDraft = Object.assign({}, getAlgorithmSettings());
+  renderAlgorithmSettings();
+}
+
+function renderAlgorithmSettings() {
+  const d = __algoDraft;
+  if (!d) return;
+
+  function renderRadios(groupKey, options) {
+    return options.map(opt => {
+      const checked = d[groupKey] === opt.key ? 'checked' : '';
+      return `
+        <label class="algo-radio-row">
+          <input type="radio" name="algo_${groupKey}" value="${escapeAttr(opt.key)}" ${checked}
+                 onchange="onAlgorithmOptionChange('${groupKey}', '${escapeAttr(opt.key)}')" />
+          <span class="algo-radio-label">${escapeHtml(opt.label)}</span>
+          <button type="button" class="algo-help-btn" title="查看说明"
+                  onclick="event.preventDefault();event.stopPropagation();showAlgorithmHelp('${groupKey}','${escapeAttr(opt.key)}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="8.01"/>
+              <line x1="12" y1="11" x2="12" y2="16"/>
+            </svg>
+          </button>
+        </label>`;
+    }).join('');
+  }
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeAlgorithmSettings()">
+      <div class="modal algo-modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>算法设置</h3>
+          <button class="icon-btn" onclick="closeAlgorithmSettings()">×</button>
+        </div>
+        <div class="modal-body">
+          <p class="algo-intro">
+            选择各部分计算方式。点右边 <span class="algo-help-inline">!</span> 可查看说明和示例。<br>
+            保存后，所有小票都按这套算法计算。
+          </p>
+
+          <div class="algo-section">
+            <div class="algo-section-title">组附加</div>
+            <div class="algo-radio-list">${renderRadios('groupExtra', ALGORITHM_OPTIONS.groupExtra)}</div>
+          </div>
+
+          <div class="algo-section">
+            <div class="algo-section-title">组折扣</div>
+            <div class="algo-radio-list">${renderRadios('groupDiscount', ALGORITHM_OPTIONS.groupDiscount)}</div>
+          </div>
+
+          <div class="algo-section">
+            <div class="algo-section-title">总附加</div>
+            <div class="algo-radio-list">${renderRadios('orderExtra', ALGORITHM_OPTIONS.orderExtra)}</div>
+          </div>
+
+          <div class="algo-section">
+            <div class="algo-section-title">总折扣</div>
+            <div class="algo-radio-list">${renderRadios('orderDiscount', ALGORITHM_OPTIONS.orderDiscount)}</div>
+          </div>
+
+          <div class="actions" style="justify-content:space-between;margin-top:22px;">
+            <button type="button" class="action-btn ghost" onclick="resetAlgorithmSettings()">恢复默认</button>
+            <div style="display:flex;gap:10px;">
+              <button type="button" class="action-btn ghost" onclick="closeAlgorithmSettings()">取消</button>
+              <button type="button" class="action-btn" onclick="saveAlgorithmSettings()">保存</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function onAlgorithmOptionChange(groupKey, optKey) {
+  if (!__algoDraft) return;
+  __algoDraft[groupKey] = optKey;
+}
+
+function showAlgorithmHelp(groupKey, optKey) {
+  const list = ALGORITHM_OPTIONS[groupKey] || [];
+  const opt = list.find(o => o.key === optKey);
+  if (!opt) return;
+
+  const groupName = {
+    groupExtra: '组附加',
+    groupDiscount: '组折扣',
+    orderExtra: '总附加',
+    orderDiscount: '总折扣',
+  }[groupKey] || '';
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this){closeModal();renderAlgorithmSettings();}">
+      <div class="modal" onclick="event.stopPropagation()" style="max-width:480px;">
+        <div class="modal-head">
+          <h3>${escapeHtml(groupName)} · 说明</h3>
+          <button class="icon-btn" onclick="closeModal();renderAlgorithmSettings();">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size:15px;font-weight:700;color:var(--ink);margin:6px 0 14px;">${escapeHtml(opt.label)}</p>
+          <div class="algo-help-block">
+            <div class="algo-help-label">说明</div>
+            <div class="algo-help-text">${escapeHtml(opt.desc)}</div>
+          </div>
+          <div class="algo-help-block">
+            <div class="algo-help-label">示例</div>
+            <div class="algo-help-text">${escapeHtml(opt.example)}</div>
+          </div>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn" onclick="closeModal();renderAlgorithmSettings();">返回</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function resetAlgorithmSettings() {
+  __algoDraft = Object.assign({}, DEFAULT_ALGORITHM_SETTINGS);
+  renderAlgorithmSettings();
+}
+
+function saveAlgorithmSettings() {
+  const d = __algoDraft;
+  if (!d) return;
+
+  const oldD = getAlgorithmSettings();
+  const changed =
+    oldD.groupExtra    !== d.groupExtra ||
+    oldD.groupDiscount !== d.groupDiscount ||
+    oldD.orderExtra    !== d.orderExtra ||
+    oldD.orderDiscount !== d.orderDiscount;
+
+  if (!changed) {
+    closeAlgorithmSettings();
+    return;
+  }
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>确认保存算法设置</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;line-height:1.8;">
+            保存后，<strong>所有小票将按新算法计算</strong>。
+          </p>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;line-height:1.7;">
+            已经导入的历史订单不受影响（它们用生成时的快照数据）。<br>
+            正在填写的小票页，切回后会自动重算。
+          </p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" onclick="confirmSaveAlgorithmSettings()">确定保存</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function confirmSaveAlgorithmSettings() {
+  if (!__algoDraft) return;
+  setAlgorithmSettings(__algoDraft);
+  __algoDraft = null;
+  closeModal();
+
+  refreshAllGroupSubtotals();
+
+  if (window.__receiptGenerated) {
+    try { generate(); } catch (e) {}
+  }
+
+  showSimpleAlert('已保存', '算法设置已更新。');
+}
+
+function closeAlgorithmSettings() {
+  __algoDraft = null;
+  closeModal();
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   [ALG-03] 组右下角「组合计」实时计算
+   ═══════════════════════════════════════════════════════ */
+
+function updateGroupSubtotalLive(groupBlock) {
+  if (!groupBlock) return;
+  const cg = calcGroup(groupBlock);
+  const el = groupBlock.querySelector('.g-subtotal-val');
+  if (el) el.textContent = fmt(cg.groupTotal);
+}
+
+function refreshAllGroupSubtotals() {
+  document.querySelectorAll('#groupsContainer .group-block').forEach(gb => {
+    updateGroupSubtotalLive(gb);
+  });
+}
+
+(function bindGroupLiveUpdate() {
+  if (window.__groupLiveBound) return;
+  window.__groupLiveBound = true;
+
+  document.addEventListener('input', function (e) {
+    const gb = e.target && e.target.closest ? e.target.closest('.group-block') : null;
+    if (gb) updateGroupSubtotalLive(gb);
+  });
+
+  document.addEventListener('change', function (e) {
+    const gb = e.target && e.target.closest ? e.target.closest('.group-block') : null;
+    if (gb) updateGroupSubtotalLive(gb);
+  });
+})();
+
+
+/* ═══════════════════════════════════════════════════════
+   [FEE-01] 服务费计算
+   ═══════════════════════════════════════════════════════ */
+
+const SERVICE_FEE_KEY = 'listReceiptServiceFees';
+const PREPAID_CONFIG_KEY = 'listReceiptPrepaidConfig';
+
+const FEE_PLATFORM_NAMES = { huajia: '画加', xianyu: '咸鱼', mihuashi: '米画师' };
+
+function calcHuajiaFee(base, vipLevel) {
+  const b = Number(base) || 0;
+  const vip = Number(vipLevel) || 0;
+  let serviceFee = 0, channelFee = 0;
+  if (b <= 500) {
+    serviceFee = b * 0.05;
+  } else {
+    serviceFee = 500 * 0.05;
+    channelFee = (b - 500) * 0.01;
+  }
+  if (vip === 1) serviceFee *= 0.9;
+  else if (vip === 2) serviceFee *= 0.8;
+  else if (vip === 3) serviceFee *= 0.7;
+  return {
+    serviceFee: Math.round(serviceFee * 100) / 100,
+    channelFee: Math.round(channelFee * 100) / 100,
+  };
+}
+
+function calcXianyuFee(base) {
+  const b = Number(base) || 0;
+  return { serviceFee: Math.round(b * 0.06 * 100) / 100, channelFee: 0 };
+}
+
+function calcMihuashiFee(price) {
+  const p = Number(price) || 0;
+  return Math.floor(p * 0.05);
+}
+
+function calcServiceFee(platform, config, base) {
+  const cfg = config || {};
+  const b = Number(base) || 0;
+  if (platform === 'huajia') {
+    const r = calcHuajiaFee(b, cfg.vipLevel || 0);
+    return {
+      platform: 'huajia', platformName: '画加',
+      base: b, vipLevel: cfg.vipLevel || 0,
+      serviceFee: r.serviceFee, channelFee: r.channelFee,
+      addedToPayable: true, actualReceive: b,
+    };
+  }
+  if (platform === 'xianyu') {
+    const r = calcXianyuFee(b);
+    return {
+      platform: 'xianyu', platformName: '咸鱼',
+      base: b, serviceFee: r.serviceFee, channelFee: r.channelFee,
+      addedToPayable: true, actualReceive: b,
+    };
+  }
+  if (platform === 'mihuashi') {
+    const mode = cfg.mihuashiMode || 'showcase';
+    const raw = cfg.inputPrice;
+    const price = (raw !== null && raw !== undefined && isFinite(Number(raw)) && Number(raw) > 0)
+      ? Number(raw) : b;
+    const fee = calcMihuashiFee(price);
+    if (mode === 'showcase') {
+      return {
+        platform: 'mihuashi', platformName: '米画师·橱窗', mode: 'showcase',
+        base: b, inputPrice: price,
+        serviceFee: fee, channelFee: 0,
+        addedToPayable: false, actualReceive: price - fee,
+      };
+    }
+    return {
+      platform: 'mihuashi', platformName: '米画师·邀请', mode: 'invite',
+      base: b, inputPrice: price,
+      serviceFee: fee, channelFee: 0,
+      addedToPayable: true, actualReceive: price,
+    };
+  }
+  return null;
+}
+
+function getOrderServiceFeeConfig() {
+  const stored = safeLSGet(SERVICE_FEE_KEY, null, v => v && typeof v === 'object');
+  return stored || null;
+}
+function setOrderServiceFeeConfig(cfg) {
+  if (!cfg) {
+    try { localStorage.removeItem(SERVICE_FEE_KEY); } catch (e) {}
+    return true;
+  }
+  return safeLSSet(SERVICE_FEE_KEY, cfg);
+}
+
+function getPrepaidConfig() {
+  if (window.__prepaidConfig) return window.__prepaidConfig;
+  const stored = safeLSGet(PREPAID_CONFIG_KEY, null, v => v && typeof v === 'object');
+  window.__prepaidConfig = stored || { enabled: true, customAmount: null };
+  return window.__prepaidConfig;
+}
+function setPrepaidConfig(cfg) {
+  window.__prepaidConfig = cfg;
+  return safeLSSet(PREPAID_CONFIG_KEY, cfg);
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   [FEE-02] 定金开关
+   ═══════════════════════════════════════════════════════ */
+
+const PLATFORMS_NO_DEPOSIT = ['画加', '米画师'];
+
+function isDepositEnabled() {
+  const el = $('depositEnabled');
+  return el ? !!el.checked : true;
+}
+
+function updateDepositInputDisabled() {
+  const enabled = isDepositEnabled();
+  const input = $('deposit');
+  const wrap = $('depositWrap');
+  if (input) input.disabled = !enabled;
+  if (wrap) wrap.style.opacity = enabled ? '' : '0.5';
+}
+
+function onDepositEnabledToggle() {
+  updateDepositInputDisabled();
+}
+
+function autoUpdateDepositByPlatform() {
+  const platform = $('platform') ? $('platform').value : '';
+  const toggle = $('depositEnabled');
+  if (!toggle) return;
+  toggle.checked = PLATFORMS_NO_DEPOSIT.indexOf(platform) === -1;
+  updateDepositInputDisabled();
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   [FEE-03] 预付金额弹窗
+   ═══════════════════════════════════════════════════════ */
+
+function getSystemPrepaid() {
+  try {
+    const snap = captureReceiptFormSnapshot();
+    const amounts = calcSnapshotAmounts(snap);
+    return amounts.prepaid;
+  } catch (e) { return 0; }
+}
+
+function buildPrepaidFormulaHtml() {
+  try {
+    const snap = captureReceiptFormSnapshot();
+    if (snap.placeholder) {
+      return '占位单：预付款 = 排单费 = ' + fmt(Number(snap.deposit) || 0);
+    }
+    let total = 0, nodeCount = 0;
+    (snap.groups || []).forEach(g => {
+      (g.items || []).forEach(it => {
+        total++;
+        const ni = (it.subItems || []).filter(si => si.isNode);
+        if (ni.length) nodeCount++;
+      });
+    });
+    if (total > 0 && nodeCount === total) {
+      return '纯节点单：预付款 = 各稿件第一个节点金额之和 = ' + fmt(getSystemPrepaid());
+    }
+    const depVal = Number(snap.deposit) || 0;
+    if (snap.depositMode === 'amount') {
+      return '定金模式（固定金额）：预付款 = ' + fmt(depVal);
+    }
+    return '定金模式（百分比）：预付款 = 应付金额 × ' + pctShort(depVal) + ' = ' + fmt(getSystemPrepaid());
+  } catch (e) { return '（无法计算）'; }
+}
+
+var __prepaidLastSystemValue = null;
+
+function openPrepaidModal() {
+  const cfg = getPrepaidConfig();
+  const enabled = !!cfg.enabled;
+  const systemPrepaid = getSystemPrepaid();
+
+  /* ★ 若系统算出来的值变了（说明用户改了当前小票），清掉之前的自定义值 */
+  if (__prepaidLastSystemValue !== null && __prepaidLastSystemValue !== systemPrepaid) {
+    cfg.customAmount = null;
+    setPrepaidConfig(cfg);
+  }
+  __prepaidLastSystemValue = systemPrepaid;
+
+  const customAmount = (cfg.customAmount !== null && cfg.customAmount !== undefined && isFinite(Number(cfg.customAmount)))
+    ? Number(cfg.customAmount) : null;
+  const displayAmount = customAmount !== null ? customAmount : systemPrepaid;
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closePrepaidModal()">
+      <div class="modal prepaid-modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>预付金额</h3>
+          <button class="icon-btn" onclick="closePrepaidModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="prepaid-toggle-row">
+            <button type="button" class="prepaid-toggle-btn ${enabled ? 'active' : ''}"
+                    id="prepaidHasBtn" onclick="pickPrepaidEnabled(true)">有预付款</button>
+            <button type="button" class="prepaid-toggle-btn ${!enabled ? 'active' : ''}"
+                    id="prepaidNoneBtn" onclick="pickPrepaidEnabled(false)">无预付款</button>
+          </div>
+          <div id="prepaidDetail" style="${enabled ? '' : 'display:none;'}">
+            <div class="prepaid-calc">
+              <div class="prepaid-calc-title">系统计算过程</div>
+              <div class="prepaid-calc-formula">${buildPrepaidFormulaHtml()}</div>
+            </div>
+            <label style="margin-top:16px;">预付金额（可自定义修改）</label>
+            <div class="input-unit-wrap prefix">
+              <input type="number" step="0.01" inputmode="decimal" id="prepaidAmountInput"
+                     value="${num2(displayAmount)}" oninput="onPrepaidAmountInput()" />
+              <span class="input-unit">¥</span>
+            </div>
+            <div class="prepaid-hint" id="prepaidHint">
+              ${customAmount !== null ? '当前使用自定义金额' : '当前使用系统计算的金额'}
+            </div>
+            <button type="button" class="prepaid-reset-btn" onclick="resetPrepaidAmount()">恢复系统计算值</button>
+          </div>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn ghost" onclick="closePrepaidModal()">取消</button>
+            <button class="action-btn" onclick="confirmPrepaidModal()">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function pickPrepaidEnabled(on) {
+  const has = $('prepaidHasBtn'), none = $('prepaidNoneBtn'), detail = $('prepaidDetail');
+  if (has) has.classList.toggle('active', on);
+  if (none) none.classList.toggle('active', !on);
+  if (detail) detail.style.display = on ? '' : 'none';
+  const cfg = getPrepaidConfig();
+  cfg.enabled = on;
+  setPrepaidConfig(cfg);
+}
+
+function onPrepaidAmountInput() {
+  const input = $('prepaidAmountInput');
+  if (!input) return;
+  const v = Number(input.value);
+  const cfg = getPrepaidConfig();
+  cfg.customAmount = isFinite(v) ? v : 0;
+  setPrepaidConfig(cfg);
+  const hint = $('prepaidHint');
+  if (hint) hint.textContent = '当前使用自定义金额';
+}
+
+function resetPrepaidAmount() {
+  const input = $('prepaidAmountInput');
+  if (input) input.value = num2(getSystemPrepaid());
+  const cfg = getPrepaidConfig();
+  cfg.customAmount = null;
+  setPrepaidConfig(cfg);
+  const hint = $('prepaidHint');
+  if (hint) hint.textContent = '当前使用系统计算的金额';
+}
+
+function confirmPrepaidModal() {
+  closePrepaidModal();
+  updatePrepaidBtnState();
+}
+
+function closePrepaidModal() { closeModal(); }
+
+function updatePrepaidBtnState() {
+  const el = $('prepaidBtnState');
+  if (!el) return;
+  const cfg = getPrepaidConfig();
+  if (!cfg.enabled) {
+    el.textContent = '无';
+    el.classList.add('is-off');
+  } else {
+    el.textContent = '已设置';
+    el.classList.remove('is-off');
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   [FEE-04] 服务费弹窗（组 / 订单通用）
+   ═══════════════════════════════════════════════════════ */
+
+var __serviceFeeModal = null;
+
+function openServiceFeeModal(title, existingCfg, base, onConfirm) {
+  __serviceFeeModal = {
+    title: title,
+    cfg: Object.assign({ platform: '', vipLevel: 0, mihuashiMode: 'showcase', inputPrice: null }, existingCfg || {}),
+    base: Number(base) || 0,
+    onConfirm: onConfirm,
+  };
+  renderServiceFeeModal();
+}
+
+function renderServiceFeeModal() {
+  const m = __serviceFeeModal;
+  if (!m) return;
+  const cfg = m.cfg;
+  const platform = cfg.platform || '';
+  const base = m.base;
+
+  let result = null;
+  if (platform) result = calcServiceFee(platform, cfg, base);
+
+  const platformHtml = `
+    <div class="fee-platform-row">
+      <button type="button" class="fee-platform-btn ${platform === 'huajia' ? 'active' : ''}"
+              onclick="pickFeePlatform('huajia')">画加</button>
+      <button type="button" class="fee-platform-btn ${platform === 'xianyu' ? 'active' : ''}"
+              onclick="pickFeePlatform('xianyu')">咸鱼</button>
+      <button type="button" class="fee-platform-btn ${platform === 'mihuashi' ? 'active' : ''}"
+              onclick="pickFeePlatform('mihuashi')">米画师</button>
+    </div>`;
+
+  let extraHtml = '';
+  if (platform === 'huajia') {
+    const v = cfg.vipLevel || 0;
+    extraHtml = `
+      <div class="fee-extra-block">
+        <label>真爱永恒特权卡</label>
+        <div class="fee-vip-row">
+          <button type="button" class="fee-vip-btn ${v === 0 ? 'active' : ''}" onclick="pickVipLevel(0)">无</button>
+          <button type="button" class="fee-vip-btn ${v === 1 ? 'active' : ''}" onclick="pickVipLevel(1)">Lv1 九折</button>
+          <button type="button" class="fee-vip-btn ${v === 2 ? 'active' : ''}" onclick="pickVipLevel(2)">Lv2 八折</button>
+          <button type="button" class="fee-vip-btn ${v === 3 ? 'active' : ''}" onclick="pickVipLevel(3)">Lv3 七折</button>
+        </div>
+      </div>`;
+  }
+  if (platform === 'mihuashi') {
+    const mode = cfg.mihuashiMode || 'showcase';
+    const inputVal = (cfg.inputPrice !== null && cfg.inputPrice !== undefined && isFinite(Number(cfg.inputPrice)))
+      ? num2(cfg.inputPrice) : num2(base);
+    extraHtml = `
+      <div class="fee-extra-block">
+        <label>米画师模式</label>
+        <div class="fee-mode-row">
+          <button type="button" class="fee-mode-btn ${mode === 'showcase' ? 'active' : ''}" onclick="pickMihuashiMode('showcase')">橱窗</button>
+          <button type="button" class="fee-mode-btn ${mode === 'invite' ? 'active' : ''}" onclick="pickMihuashiMode('invite')">邀请</button>
+        </div>
+      </div>
+      <div class="fee-extra-block">
+        <label>${mode === 'showcase' ? '实际报价（单主实付）' : '期望稿酬（用户实收）'}</label>
+        <div class="input-unit-wrap prefix">
+          <input type="number" step="0.01" inputmode="decimal" id="mihuashiInputPrice"
+                 value="${inputVal}" oninput="onMihuashiPriceInput(this.value)" />
+          <span class="input-unit">¥</span>
+        </div>
+      </div>`;
+  }
+
+  const resultHtml = result
+    ? buildServiceResultHtml(result, base)
+    : '<div class="fee-empty-tip">请先选择平台。</div>';
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeServiceFeeModal()">
+      <div class="modal fee-modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>${escapeHtml(m.title)}</h3>
+          <button type="button" class="fee-clear-btn" onclick="clearServiceFee()">清除</button>
+          <button class="icon-btn" onclick="closeServiceFeeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="fee-base-row">
+            <span class="fee-base-label">基数</span>
+            <span class="fee-base-value">${fmt(base)}</span>
+          </div>
+          ${platformHtml}
+          ${extraHtml}
+          <div id="feeResultBlock">${resultHtml}</div>
+          <div class="actions" style="justify-content:flex-end;margin-top:22px;">
+            <button type="button" class="action-btn ghost" onclick="closeServiceFeeModal()">取消</button>
+            <button type="button" class="action-btn" onclick="confirmServiceFeeModal()">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function buildServiceResultHtml(result, base) {
+  let html = '<div class="fee-calc-block">';
+  html += '<div class="fee-calc-title">计算过程</div>';
+  html += '<div class="fee-calc-row"><span>基数</span><span>' + fmt(base) + '</span></div>';
+
+  if (result.platform === 'huajia') {
+    const vip = result.vipLevel || 0;
+    const rate = vip === 1 ? 0.9 : vip === 2 ? 0.8 : vip === 3 ? 0.7 : 1;
+    const originalServiceFee = Math.round((base <= 500 ? base * 0.05 : 25) * 100) / 100;
+
+    /* 小字：原服务费（未打折） */
+    if (base <= 500) {
+      html += '<div class="fee-calc-row"><span>原服务费</span><span>' + fmt(base) + ' × 5% = ' + fmt(originalServiceFee) + '</span></div>';
+    } else {
+      html += '<div class="fee-calc-row"><span>原服务费</span><span>500 × 5% = ' + fmt(originalServiceFee) + '</span></div>';
+    }
+
+    /* 真爱卡折扣（有选才显示） */
+    if (vip > 0) {
+      html += '<div class="fee-calc-row"><span>真爱卡 Lv' + vip + '（' + (rate * 10) + '折）</span><span>' + fmt(originalServiceFee) + ' × ' + rate + ' = ' + fmt(result.serviceFee) + '</span></div>';
+    }
+
+    /* 通道费（>500 才显示） */
+    if (result.channelFee > 0) {
+      html += '<div class="fee-calc-row"><span>通道费</span><span>(' + fmt(base) + ' − 500) × 1% = ' + fmt(result.channelFee) + '</span></div>';
+    }
+
+    /* 大字：折后服务费 */
+    html += '<div class="fee-calc-row is-main"><span>服务费</span><span>' + fmt(result.serviceFee) + '</span></div>';
+  }
+   else if (result.platform === 'xianyu') {
+    html += '<div class="fee-calc-row"><span>服务费</span><span>' + fmt(base) + ' × 6% = ' + fmt(result.serviceFee) + '</span></div>';
+    html += '<div class="fee-calc-row is-main"><span>服务费</span><span>' + fmt(result.serviceFee) + '</span></div>';
+  }
+   else if (result.platform === 'mihuashi') {
+    const price = result.inputPrice || 0;
+    if (result.mode === 'showcase') {
+      html += '<div class="fee-calc-row"><span>实际报价</span><span>' + fmt(price) + '</span></div>';
+      html += '<div class="fee-calc-row"><span>用户实收</span><span>' + fmt(result.actualReceive) + '</span></div>';
+      html += '<div class="fee-calc-row is-main"><span>服务费</span><span>' + fmt(result.serviceFee) + '</span></div>';
+    } else {
+      html += '<div class="fee-calc-row"><span>期望稿酬</span><span>' + fmt(price) + '</span></div>';
+      html += '<div class="fee-calc-row"><span>单主应付</span><span>' + fmt(price + result.serviceFee) + '</span></div>';
+      html += '<div class="fee-calc-row is-main"><span>服务费</span><span>' + fmt(result.serviceFee) + '</span></div>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function pickFeePlatform(p) {
+  if (!__serviceFeeModal) return;
+  __serviceFeeModal.cfg.platform = p;
+  renderServiceFeeModal();
+}
+function pickVipLevel(v) {
+  if (!__serviceFeeModal) return;
+  __serviceFeeModal.cfg.vipLevel = v;
+  renderServiceFeeModal();
+}
+function pickMihuashiMode(m) {
+  if (!__serviceFeeModal) return;
+  __serviceFeeModal.cfg.mihuashiMode = m;
+  renderServiceFeeModal();
+}
+function onMihuashiPriceInput(v) {
+  if (!__serviceFeeModal) return;
+  const m = __serviceFeeModal;
+  const price = Number(v);
+  m.cfg.inputPrice = isFinite(price) ? price : null;
+  const result = calcServiceFee('mihuashi', m.cfg, m.base);
+  const block = $('feeResultBlock');
+  if (block) block.innerHTML = buildServiceResultHtml(result, m.base);
+}
+function confirmServiceFeeModal() {
+  const m = __serviceFeeModal;
+  if (!m) return;
+  if (!m.cfg.platform) { showSimpleAlert('提示', '请先选择平台。'); return; }
+  const input = $('mihuashiInputPrice');
+  if (input && m.cfg.platform === 'mihuashi') {
+    const v = Number(input.value);
+    if (isFinite(v)) m.cfg.inputPrice = v;
+  }
+  const cfg = JSON.parse(JSON.stringify(m.cfg));
+  const cb = m.onConfirm;
+  closeServiceFeeModal();
+  if (typeof cb === 'function') cb(cfg);
+}
+function clearServiceFee() {
+  const m = __serviceFeeModal;
+  if (!m) return;
+  const cb = m.onConfirm;
+  closeServiceFeeModal();
+  if (typeof cb === 'function') cb(null);
+}
+function closeServiceFeeModal() {
+  __serviceFeeModal = null;
+  closeModal();
+}
+
+
+/* ═══════════════════════════════════════════════════════
+   [FEE-05] 组服务费 / 总服务费 入口
+   ═══════════════════════════════════════════════════════ */
+
+function openGroupServiceModal(groupBlock) {
+  if (!groupBlock) return;
+
+  /* ★ 互斥检查：已经有总服务费 → 不允许设组服务费 */
+  const existingOrderFee = getOrderServiceFeeConfig();
+  if (existingOrderFee && existingOrderFee.platform) {
+    showSimpleAlert(
+      '无法设置组服务费',
+      '你已经设置了<strong>总服务费</strong>，两者不能同时使用。<br>' +
+      '如需改用组服务费，请先到「总服务费」里清除。'
+    );
+    return;
+  }
+
+  let existing = null;
+  const raw = groupBlock.dataset.serviceFee;
+  if (raw) { try { existing = JSON.parse(raw); } catch (e) {} }
+  const cg = calcGroup(groupBlock);
+  openServiceFeeModal('组服务费', existing, cg.groupTotal, function (cfg) {
+    if (cfg) groupBlock.dataset.serviceFee = JSON.stringify(cfg);
+    else delete groupBlock.dataset.serviceFee;
+    updateGroupServiceDisplay(groupBlock);
+  });
+}
+
+function onAddGroupServiceClick(btn) {
+  const gb = btn && btn.closest ? btn.closest('.group-block') : null;
+  if (gb) openGroupServiceModal(gb);
+}
+
+function updateGroupServiceDisplay(groupBlock) {
+  if (!groupBlock) return;
+  let displayEl = groupBlock.querySelector('.group-service-display');
+  const raw = groupBlock.dataset.serviceFee;
+  let cfg = null;
+  if (raw) { try { cfg = JSON.parse(raw); } catch (e) {} }
+
+  if (!cfg || !cfg.platform) {
+    if (displayEl) displayEl.remove();
+    return;
+  }
+  const cg = calcGroup(groupBlock);
+  const result = calcServiceFee(cfg.platform, cfg, cg.groupTotal);
+  if (!result) { if (displayEl) displayEl.remove(); return; }
+
+  if (!displayEl) {
+    displayEl = document.createElement('div');
+    displayEl.className = 'group-service-display';
+    const subtotal = groupBlock.querySelector('.group-subtotal');
+    if (subtotal) subtotal.parentNode.insertBefore(displayEl, subtotal);
+    else groupBlock.appendChild(displayEl);
+  }
+
+  let html = '<div class="gs-row gs-service"><span class="gs-name">组服务费（' + escapeHtml(result.platformName) + '）</span><span class="gs-val">' + fmt(result.serviceFee) + '</span></div>';
+  if (result.channelFee > 0) {
+    html += '<div class="gs-row gs-service"><span class="gs-name">组通道费（' + escapeHtml(result.platformName) + '）</span><span class="gs-val">' + fmt(result.channelFee) + '</span></div>';
+  }
+  displayEl.innerHTML = html;
+  displayEl.style.cursor = 'pointer';
+  displayEl.onclick = function (e) { e.stopPropagation(); openGroupServiceModal(groupBlock); };
+}
+
+function getOrderBaseForService() {
+  try {
+    const alg = getAlgorithmSettings();
+    let sOrig = 0, sSub = 0, sTot = 0;
+    document.querySelectorAll('#groupsContainer .group-block').forEach(gb => {
+      const cg = calcGroup(gb);
+      if (cg.items.length === 0 && cg.extras.length === 0 && cg.discounts.length === 0) return;
+      sOrig += cg.groupOriginal; sSub += cg.groupSubtotal; sTot += cg.groupTotal;
+    });
+    const oeBase = calcOrderExtraBase(alg.orderExtra, sOrig, sSub, sTot);
+    let oe = 0;
+    document.querySelectorAll('#extrasContainer .oe-row').forEach(row => {
+      const n = row.querySelector('.extra-name').value.trim();
+      const op = row.querySelector('.extra-mode').value;
+      const v = Number(row.querySelector('.extra-val').value) || 0;
+      if (!n) return;
+      oe += (op === 'multiply') ? ((alg.orderExtra === 'fixed') ? 0 : (oeBase * v / 100)) : v;
+    });
+    const odBase = calcOrderDiscountBase(alg.orderDiscount, sOrig, sSub, sTot, oe);
+    let od = 0;
+    document.querySelectorAll('#discountsContainer .oe-row').forEach(row => {
+      const n = row.querySelector('.discount-name').value.trim();
+      const op = row.querySelector('.discount-mode').value;
+      const v = Number(row.querySelector('.discount-val').value) || 0;
+      if (!n) return;
+      od += (op === 'multiply') ? ((alg.orderDiscount === 'fixed') ? 0 : (odBase * v / 100)) : v;
+    });
+    return Math.max(0, sTot + oe - od);
+  } catch (e) { return 0; }
+}
+
+function openOrderServiceModal() {
+  /* ★ 互斥检查：任何一个组已经有组服务费 → 不允许设总服务费 */
+  let groupWithFee = null;
+  document.querySelectorAll('#groupsContainer .group-block').forEach(gb => {
+    if (groupWithFee) return;
+    const raw = gb.dataset.serviceFee;
+    if (!raw) return;
+    try {
+      const cfg = JSON.parse(raw);
+      if (cfg && cfg.platform) groupWithFee = gb;
+    } catch (e) {}
+  });
+
+  if (groupWithFee) {
+    showSimpleAlert(
+      '无法设置总服务费',
+      '你已经设置了<strong>组服务费</strong>，两者不能同时使用。<br>' +
+      '如需改用总服务费，请先到对应组的「组服务费」里清除。'
+    );
+    return;
+  }
+
+  const existing = getOrderServiceFeeConfig();
+  const base = getOrderBaseForService();
+  openServiceFeeModal('总服务费', existing, base, function (cfg) {
+    setOrderServiceFeeConfig(cfg);
+    updateOrderServiceBtnState();
+  });
+}
+
+function updateOrderServiceBtnState() {
+  const el = $('orderServiceBtnState');
+  if (!el) return;
+  const cfg = getOrderServiceFeeConfig();
+  if (!cfg || !cfg.platform) {
+    el.textContent = '';
+    el.classList.remove('is-on');
+  } else {
+    el.textContent = FEE_PLATFORM_NAMES[cfg.platform] || '';
+    el.classList.add('is-on');
+  }
+}
+/* ═══════════════════════════════════════════════════════
+   [R-13] 小票 · 内容显示选项（三个开关）
+   ═══════════════════════════════════════════════════════ */
+
+const CONTENT_OPTIONS_DEFAULT = {
+  showGroupOriginal: true,
+  showGroupSubtotal: true,
+  showOrderSubtotal: true,
+};
+
+function getContentOptions() {
+  const s = getReceiptSettings();
+  return Object.assign({}, CONTENT_OPTIONS_DEFAULT, s.contentOptions || {});
+}
+
+function setContentOptions(opts) {
+  const s = getReceiptSettings();
+  s.contentOptions = Object.assign({}, CONTENT_OPTIONS_DEFAULT, opts || {});
+  setReceiptSettings(s);
+}
+
+function fillContentSettingsForm() {
+  const opts = getContentOptions();
+  if ($('rsShowGroupOriginal')) $('rsShowGroupOriginal').checked = !!opts.showGroupOriginal;
+  if ($('rsShowGroupSubtotal')) $('rsShowGroupSubtotal').checked = !!opts.showGroupSubtotal;
+  if ($('rsShowOrderSubtotal')) $('rsShowOrderSubtotal').checked = !!opts.showOrderSubtotal;
+}
+
+function onContentSettingChange() {
+  const opts = {
+    showGroupOriginal: !!($('rsShowGroupOriginal') && $('rsShowGroupOriginal').checked),
+    showGroupSubtotal: !!($('rsShowGroupSubtotal') && $('rsShowGroupSubtotal').checked),
+    showOrderSubtotal: !!($('rsShowOrderSubtotal') && $('rsShowOrderSubtotal').checked),
+  };
+  setContentOptions(opts);
+  if (window.__receiptGenerated) {
+    try { generate(); } catch (e) {}
+  }
+}
+
+function applySmartSimple() {
+  setContentOptions({
+    showGroupOriginal: false,
+    showGroupSubtotal: false,
+    showOrderSubtotal: false,
+  });
+  fillContentSettingsForm();
+  if (window.__receiptGenerated) {
+    try { generate(); } catch (e) {}
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
    [R-02] 小票设置的读 / 写
    ═══════════════════════════════════════════════════════ */
 
 function getReceiptSettings() {
+
   const stored = safeLSGet(RECEIPT_SETTINGS_KEY, null,
     v => v && typeof v === 'object');
   if (!stored) {
@@ -2712,6 +4020,10 @@ function switchRsTab(tab) {
   document.querySelectorAll('.rs-pane').forEach(p => p.classList.remove('active'));
   if (tab === 'basic' && $('rsPaneBasic')) $('rsPaneBasic').classList.add('active');
   if (tab === 'style' && $('rsPaneStyle')) $('rsPaneStyle').classList.add('active');
+  if (tab === 'content' && $('rsPaneContent')) {
+    $('rsPaneContent').classList.add('active');
+    fillContentSettingsForm();
+  }
 }
 
 /* 把设置面板里的所有字段填上当前值 */
@@ -3127,7 +4439,8 @@ function confirmSaveReceiptPreset(defaultName) {
     'bgImg', 'bgImgState', 'bgOpacity',
     'footer1', 'footer2',
     'bgColor', 'font', 'fontSize',
-    'colorPrimary', 'colorSecondary', 'lineColor'
+    'colorPrimary', 'colorSecondary', 'lineColor',
+    'contentOptions'
   ];
   fields.forEach(k => {
     if (settings[k] === undefined && DEFAULT_RECEIPT_SETTINGS[k] !== undefined) {
@@ -3238,8 +4551,6 @@ function applyReceiptPresetByIndex(idx) {
 function applyReceiptPreset(preset) {
   if (!preset || !preset.settings) return;
 
-
-
   /* ★ 用默认值兜底 + 应用预设全部字段 */
   const s = JSON.parse(JSON.stringify(DEFAULT_RECEIPT_SETTINGS));
   const p = preset.settings;
@@ -3255,12 +4566,17 @@ function applyReceiptPreset(preset) {
   if (p.colorSecondary) s.colorSecondary = p.colorSecondary;
   if (p.lineColor)      s.lineColor      = p.lineColor;
 
+  /* 内容显示选项 */
+  if (p.contentOptions) {
+    s.contentOptions = Object.assign({}, CONTENT_OPTIONS_DEFAULT, p.contentOptions);
+  }
+
   /* 图片引用 */
   if (p.headerImg) s.headerImg = p.headerImg;
   if (p.footerImg) s.footerImg = p.footerImg;
   if (p.bgImg)     s.bgImg     = p.bgImg;
 
-  /* ★ 图片位置状态（关键！之前可能漏了） */
+  /* 图片位置状态 */
   if (p.headerImgState) s.headerImgState = JSON.parse(JSON.stringify(p.headerImgState));
   if (p.footerImgState) s.footerImgState = JSON.parse(JSON.stringify(p.footerImgState));
   if (p.bgImgState)     s.bgImgState     = JSON.parse(JSON.stringify(p.bgImgState));
@@ -3269,6 +4585,9 @@ function applyReceiptPreset(preset) {
   fillReceiptSettingsForm();
   applyReceiptSettings();
   renderCustomFontList();
+
+  /* 内容面板也同步刷新 */
+  if (typeof fillContentSettingsForm === 'function') fillContentSettingsForm();
 
   /* 图片加载完后重新绑定编辑手柄 */
   if ($('receiptLayout') && $('receiptLayout').classList.contains('settings-open')) {
@@ -3345,6 +4664,8 @@ async function confirmResetReceiptSettings() {
 
   /* ★ 从 localStorage 彻底删掉设置 */
   try { localStorage.removeItem(RECEIPT_SETTINGS_KEY); } catch (e) {}
+    /* 恢复内容开关为默认 */
+  setContentOptions(CONTENT_OPTIONS_DEFAULT);
 
   /* ★ 清掉当前激活的图片编辑态 */
   __activeReceiptImage = null;
@@ -3380,8 +4701,14 @@ async function confirmResetReceiptSettings() {
 
   /* ★ 重新填充表单 + 应用设置 */
   fillReceiptSettingsForm();
+  if (typeof fillContentSettingsForm === 'function') fillContentSettingsForm();
   applyReceiptSettings();
   updateReceiptImageActiveState();
+
+  /* 如果小票已生成，重新生成一次 */
+  if (window.__receiptGenerated) {
+    try { generate(); } catch (e) {}
+  }
 
   if ($('receiptLayout') && $('receiptLayout').classList.contains('settings-open')) {
     setTimeout(() => setupReceiptImgDrag(), 100);
@@ -3798,7 +5125,6 @@ function calcItem(block, licenseOverride) {
     const svalue = Number(sub.querySelector('.sub-value').value) || 0;
 
     if (sub.dataset.isNode === '1') {
-      /* 节点：比例（后面按单元原价算） */
       nodes.push({
         name: sname,
         op: 'multiply',
@@ -3807,7 +5133,6 @@ function calcItem(block, licenseOverride) {
         isNode: true,
       });
     } else {
-      /* 增项：× 或 ＋ */
       const sopSel = sub.querySelector('.sub-op-select');
       const sop = sopSel ? sopSel.value : 'add';
       addons.push({
@@ -3836,21 +5161,23 @@ function calcItem(block, licenseOverride) {
   /* 单元原价 = 基础价 + 增项合计 */
   const baseUnit = price + addonSum;
 
-  /* 第三步：算节点（基于单元原价 × 比例） */
-  let nodeSum = 0;
+  /* 单稿件原价（单元） */
+  const itemOriginalUnit = baseUnit;
+
+  /* 单稿件小计 = 单稿件原价 × 数量（不含用途比例） */
+  const itemOriginalTotal = itemOriginalUnit * qty;
+
+  /* 单稿件合计 = 单稿件小计 × 用途比例（权限倍率） */
+  const itemTotal = itemOriginalTotal * m;
+
+  /* 第三步：算节点（只用于展示拆分，不改变 itemTotal） */
   nodes.forEach(n => {
     const unit = baseUnit * n.value / 100;
     n.unit     = unit;
     n.subtotal = unit * qty * m;
-    nodeSum   += unit;
   });
 
   const hasNodes = nodes.length > 0;
-
-  /* 有节点 → 单元合计用节点之和（比例合计=100% 时等于 baseUnit）
-     没节点 → 单元合计就是 baseUnit */
-  const partsUnitSum = hasNodes ? nodeSum : baseUnit;
-  const itemSubtotal = partsUnitSum * qty * m;
 
   return {
     name, price, qty, license, m,
@@ -3858,8 +5185,11 @@ function calcItem(block, licenseOverride) {
     nodes,
     baseUnit,
     addonSum,
-    partsUnitSum,
-    itemSubtotal,
+    itemOriginalUnit,
+    itemOriginalTotal,
+    itemTotal,
+    partsUnitSum: baseUnit,
+    itemSubtotal: itemTotal,
     hasNodes,
   };
 }
@@ -3881,9 +5211,12 @@ function calcItem(block, licenseOverride) {
    ═══════════════════════════════════════════════════════ */
 
 function calcGroup(groupBlock) {
+  const alg = getAlgorithmSettings();
+
   const items = [];
-  let groupSubtotal       = 0;
-  let nonNodeSubtotal     = 0;
+  let groupOriginal    = 0;
+  let groupSubtotal    = 0;
+  let nonNodeSubtotal  = 0;
   let nodeItemsFirstAmount = 0;
 
   /* 组内每个稿件 */
@@ -3891,19 +5224,21 @@ function calcGroup(groupBlock) {
     const r = calcItem(block);
     if (!r.name) return;
     items.push(r);
-    groupSubtotal += r.itemSubtotal;
+
+    groupOriginal += r.itemOriginalTotal;
+    groupSubtotal += r.itemTotal;
 
     if (r.hasNodes) {
-      /* 节点稿件：记下第一个节点的金额（用于纯节点单的预付款） */
       if (r.nodes[0]) nodeItemsFirstAmount += r.nodes[0].subtotal;
     } else {
-      nonNodeSubtotal += r.itemSubtotal;
+      nonNodeSubtotal += r.itemTotal;
     }
   });
 
-  /* 组附加费用：算法 × 时按组小计的百分比，＋ 时按固定金额 */
+  /* 组附加费用：按算法设置决定基数 */
   const extras = [];
   let extrasTotal = 0;
+  const geBase = calcGroupExtraBase(alg.groupExtra, groupOriginal, groupSubtotal);
   groupBlock.querySelectorAll('.group-extras .ge-row').forEach(row => {
     const name  = row.querySelector('.ge-name').value.trim();
     const op    = row.querySelector('.ge-op-select').value;
@@ -3911,15 +5246,20 @@ function calcGroup(groupBlock) {
     if (!name) return;
 
     let amount;
-    if (op === 'multiply') amount = groupSubtotal * value / 100;
-    else                   amount = value;
+    if (op === 'multiply') {
+      amount = (alg.groupExtra === 'fixed') ? 0 : (geBase * value / 100);
+    } else {
+      amount = value;
+    }
 
-    extras.push({ name, op, value, amount, base: groupSubtotal });
+    extras.push({ name, op, value, amount, base: geBase, algKey: alg.groupExtra });
     extrasTotal += amount;
   });
 
-  /* 组优惠折扣：算法 × 时基数是"组小计 + 组附加费" */
-  const groupDiscountBase = groupSubtotal + extrasTotal;
+  /* 组优惠折扣：按算法设置决定基数 */
+  const gdBase = calcGroupDiscountBase(
+    alg.groupDiscount, groupOriginal, groupSubtotal, extrasTotal
+  );
   const discounts = [];
   let discountsTotal = 0;
   groupBlock.querySelectorAll('.group-discounts .ge-row').forEach(row => {
@@ -3929,10 +5269,13 @@ function calcGroup(groupBlock) {
     if (!name) return;
 
     let amount;
-    if (op === 'multiply') amount = groupDiscountBase * value / 100;
-    else                   amount = value;
+    if (op === 'multiply') {
+      amount = (alg.groupDiscount === 'fixed') ? 0 : (gdBase * value / 100);
+    } else {
+      amount = value;
+    }
 
-    discounts.push({ name, op, value, amount, base: groupDiscountBase });
+    discounts.push({ name, op, value, amount, base: gdBase, algKey: alg.groupDiscount });
     discountsTotal += amount;
   });
 
@@ -3940,6 +5283,7 @@ function calcGroup(groupBlock) {
 
   return {
     items,
+    groupOriginal,
     groupSubtotal,
     extras, extrasTotal,
     discounts, discountsTotal,
@@ -3974,13 +5318,13 @@ function setOptionalRow(rowEl, value) {
 
 /* 检查身份 / ID 是否已填，没填弹窗让用户去填 */
 function checkIdentityAndName() {
-  const identity = $('setIdentity') ? String($('setIdentity').value || '').trim() : '';
-  const name     = $('setName')     ? String($('setName').value     || '').trim() : '';
+  const identity = $('artistIdentity') ? String($('artistIdentity').value || '').trim() : '';
+  const name     = $('artistId')       ? String($('artistId').value       || '').trim() : '';
 
   if (identity && name) return true;
 
   const missing = [];
-  if (!identity) missing.push('身份');
+  if (!identity) missing.push('画师 / 美工');
   if (!name)     missing.push('ID');
 
   $('modalRoot').innerHTML = `
@@ -4059,20 +5403,45 @@ function generate() {
   const placeholderOn = $('placeholderToggle') && $('placeholderToggle').checked;
 
   /* 4. 写进小票 DOM */
-  $('outOrderNo').textContent = makeOrderNo(orderDate);
+  /* 编号固定策略：
+     - 编辑已有订单 → 用该订单的原编号
+     - 否则如果本次会话已生成过 → 复用（避免每次点确定都变）
+     - 否则新随机一个 */
+  if (window.__editingTodoId) {
+    const __et = getTodos().find(x => x.id === window.__editingTodoId);
+    if (__et && __et.orderNo) {
+      window.__currentOrderNo = __et.orderNo;
+    }
+  }
+  if (!window.__currentOrderNo) {
+    window.__currentOrderNo = makeOrderNo(orderDate);
+  }
+  $('outOrderNo').textContent = window.__currentOrderNo;
+
+  /* 读画师/美工（小票页的新字段；为空时回退到设置里的值） */
+  const artistIdentityVal = ($('artistIdentity') && $('artistIdentity').value)
+    ? $('artistIdentity').value.trim()
+    : (identity || '画师');
+  const artistIdVal = ($('artistId') && $('artistId').value.trim())
+    ? $('artistId').value.trim()
+    : (artist || '');
 
   if ($('outScheduleDate'))  $('outScheduleDate').textContent  = scheduleDate || '—';
   if ($('outDeadline'))      $('outDeadline').textContent      = deadline     || '—';
-  if ($('outIdentityLabel')) $('outIdentityLabel').textContent = identity;
-  if ($('outArtist'))        $('outArtist').textContent        = artist || '—';
+  if ($('outIdentityLabel')) $('outIdentityLabel').textContent = artistIdentityVal;
+  if ($('outArtist'))        $('outArtist').textContent        = artistIdVal || '—';
   if ($('outPlatform'))      $('outPlatform').textContent      = platform;
 
   $('outClientAt').textContent = '@' + (client || '—');
 
+  const ip = ($('ip') ? $('ip').value : '').trim();
+
   $('outProject').textContent   = project   || '—';
+  if ($('outIP')) $('outIP').textContent = ip || '—';
   $('outAttribute').textContent = attribute || '—';
   $('outCharacter').textContent = character || '—';
   setOptionalRow($('rowProject'),   project);
+  setOptionalRow($('rowIP'),        ip);
   setOptionalRow($('rowAttribute'), attribute);
   setOptionalRow($('rowCharacter'), character);
 
@@ -4144,15 +5513,15 @@ function generate() {
       </tr></thead><tbody>`;
 
       cg.items.forEach((r, idx) => {
-        /* 主行 */
+        /* 主行：单价显示含增项的单元原价（如 55+5+5+5=70） */
         html += `<tr><td><div class="item-name">${idx + 1}. ${escapeHtml(r.name)}</div></td>
-          <td class="r">${fmt(r.price)}</td>
+          <td class="r">${fmt(r.baseUnit)}</td>
           <td class="c">${r.qty}件</td>
           ${showLicense ? `<td class="c">${licenseText(r.license)}</td>` : ''}
           <td class="r">${fmt(r.itemSubtotal)}</td></tr>`;
 
-        /* 基础行（只有在有增项或节点时才显示） */
-        if (r.addons.length > 0 || r.nodes.length > 0) {
+        /* 基础行（只有有增项时才显示） */
+        if (r.addons.length > 0) {
           html += `<tr class="part-row"><td><div style="padding-left:14px;">└ 基础</div></td>
             <td class="r"><span class="sub">${fmt(r.price)}</span></td>
             <td class="c"><span class="sub">${r.qty}件</span></td>
@@ -4183,32 +5552,36 @@ function generate() {
       html += `</tbody></table>`;
 
       /* --- 组汇总 --- */
+      const __co = getContentOptions();
       let summaryHtml = '<div class="group-summary">';
-      summaryHtml += `<div class="gs-row"><span class="gs-name">原价小计</span><span class="gs-val">${fmt(cg.groupSubtotal)}</span></div>`;
+      if (__co.showGroupOriginal) {
+        summaryHtml += `<div class="gs-row"><span class="gs-name">组原价</span><span class="gs-val">${fmt(cg.groupOriginal)}</span></div>`;
+      }
+      if (__co.showGroupSubtotal) {
+        summaryHtml += `<div class="gs-row"><span class="gs-name">组小计</span><span class="gs-val">${fmt(cg.groupSubtotal)}</span></div>`;
+      }
 
-      /* 附加费用 */
+      /* 附加费用（没有就不显示） */
       if (cg.extras.length) {
         const formulas = cg.extras.map(ex => {
           if (ex.op === 'multiply') return `${escapeHtml(ex.name)}：${fmt(ex.base)} ×${pctShort(ex.value)} = ${fmt(ex.amount)}`;
           return `${escapeHtml(ex.name)}：＋${fmt(ex.value)} = ${fmt(ex.amount)}`;
         }).join('；');
         summaryHtml += `<div class="gs-row"><span class="gs-name">附加费用（${formulas}）</span><span class="gs-val">${fmt(cg.extrasTotal)}</span></div>`;
-      } else {
-        summaryHtml += `<div class="gs-row"><span class="gs-name">附加费用</span><span class="gs-val">${fmt(0)}</span></div>`;
       }
 
-      /* 优惠折扣 */
+      /* 优惠折扣（没有就不显示） */
       if (cg.discounts.length) {
         const formulas = cg.discounts.map(dc => {
           if (dc.op === 'multiply') return `${escapeHtml(dc.name)}：${fmt(dc.base)} ×${pctShort(dc.value)} = -${fmt(dc.amount)}`;
           return `${escapeHtml(dc.name)}：−${fmt(dc.value)} = -${fmt(dc.amount)}`;
         }).join('；');
         summaryHtml += `<div class="gs-row"><span class="gs-name">优惠费用（${formulas}）</span><span class="gs-val">-${fmt(cg.discountsTotal)}</span></div>`;
-      } else {
-        summaryHtml += `<div class="gs-row"><span class="gs-name">优惠费用</span><span class="gs-val">-${fmt(0)}</span></div>`;
       }
 
-      summaryHtml += `<div class="gs-row gs-total"><span>稿件组合计</span><span>${fmt(cg.groupTotal)}</span></div>`;
+      summaryHtml += `<div class="gs-row gs-total"><span>组合计</span><span>${fmt(cg.groupTotal)}</span></div>`;
+
+            summaryHtml += `<div class="gs-row gs-total"><span>组合计</span><span>${fmt(cg.groupTotal)}</span></div>`;
       summaryHtml += '</div>';
 
       html += summaryHtml;
@@ -4239,7 +5612,21 @@ function generate() {
     outGroups.appendChild(section);
   }
 
-  /* 7. 订单级附加费用 */
+  /* 7. 订单级附加费用（按算法设置决定基数） */
+  const alg = getAlgorithmSettings();
+  let sumGroupOriginal = 0;
+  let sumGroupSubtotal = 0;
+  let sumGroupTotal    = 0;
+
+  document.querySelectorAll('#groupsContainer .group-block').forEach(gb => {
+    const cgTmp = calcGroup(gb);
+    if (cgTmp.items.length === 0 && cgTmp.extras.length === 0 && cgTmp.discounts.length === 0) return;
+    sumGroupOriginal += cgTmp.groupOriginal;
+    sumGroupSubtotal += cgTmp.groupSubtotal;
+    sumGroupTotal    += cgTmp.groupTotal;
+  });
+
+  const oeBase = calcOrderExtraBase(alg.orderExtra, sumGroupOriginal, sumGroupSubtotal, sumGroupTotal);
   let orderExtrasTotal = 0;
   const orderExtrasNames = [];
   if (!placeholderOn) {
@@ -4248,14 +5635,27 @@ function generate() {
       const op   = row.querySelector('.extra-mode').value;
       const val  = Number(row.querySelector('.extra-val').value) || 0;
       if (!name) return;
-      let amount = (op === 'multiply') ? orderSubtotal * val / 100 : val;
+      let amount;
+      if (op === 'multiply') {
+        amount = (alg.orderExtra === 'fixed') ? 0 : (oeBase * val / 100);
+      } else {
+        amount = val;
+      }
       orderExtrasTotal += amount;
-      const opStr = (op === 'multiply') ? ('×' + pctShort(val)) : ('＋' + fmt(val));
-      orderExtrasNames.push(escapeHtml(name) + '（' + opStr + '）');
+      let formula;
+      if (op === 'multiply') {
+        formula = fmt(oeBase) + ' ×' + pctShort(val) + ' = ' + fmt(amount);
+      } else {
+        formula = '＋' + fmt(val) + ' = ' + fmt(amount);
+      }
+      orderExtrasNames.push(escapeHtml(name) + '：' + formula);
     });
   }
 
-  /* 8. 订单级优惠 */
+  /* 8. 订单级优惠（按算法设置决定基数） */
+  const odBase = calcOrderDiscountBase(
+    alg.orderDiscount, sumGroupOriginal, sumGroupSubtotal, sumGroupTotal, orderExtrasTotal
+  );
   let orderDiscountTotal = 0;
   const orderDiscountsNames = [];
   if (!placeholderOn) {
@@ -4264,15 +5664,36 @@ function generate() {
       const op   = row.querySelector('.discount-mode').value;
       const val  = Number(row.querySelector('.discount-val').value) || 0;
       if (!name) return;
-      let amount = (op === 'multiply') ? orderSubtotal * val / 100 : val;
+      let amount;
+      if (op === 'multiply') {
+        amount = (alg.orderDiscount === 'fixed') ? 0 : (odBase * val / 100);
+      } else {
+        amount = val;
+      }
       orderDiscountTotal += amount;
-      const opStr = (op === 'multiply') ? ('×' + pctShort(val)) : ('−' + fmt(val));
-      orderDiscountsNames.push(escapeHtml(name) + '（' + opStr + '）');
+      let formula;
+      if (op === 'multiply') {
+        formula = fmt(odBase) + ' ×' + pctShort(val) + ' = -' + fmt(amount);
+      } else {
+        formula = '−' + fmt(val) + ' = -' + fmt(amount);
+      }
+      orderDiscountsNames.push(escapeHtml(name) + '：' + formula);
     });
   }
 
-  /* 订单总价行 */
-  $('outTotal').textContent = fmt(orderSubtotal);
+  /* 总合计 = 各稿件组合计之和 */
+  if ($('outSubtotalTotal')) {
+    $('outSubtotalTotal').textContent = fmt(orderSubtotal);
+    const __totalRow = $('outSubtotalTotal').closest('.row');
+    if (__totalRow) {
+      const __coTotal = getContentOptions();
+      __totalRow.style.display = __coTotal.showOrderSubtotal ? 'flex' : 'none';
+    }
+  }
+
+  /* 订单总价 = 总合计 + 总附加 − 总折扣 */
+  const finalOrderTotal = orderSubtotal + orderExtrasTotal - orderDiscountTotal;
+  $('outTotal').textContent = fmt(finalOrderTotal);
 
   /* 订单级附加费用行 */
   const extraRow = $('outOrderExtrasRow');
@@ -4281,9 +5702,11 @@ function generate() {
       extraRow.style.display = 'flex';
       const labelEl = $('outOrderExtrasLabel');
       if (labelEl) {
-        labelEl.textContent = orderExtrasNames.length
-          ? ('订单总附加费用（' + orderExtrasNames.join('；') + '）')
-          : '订单总附加费用';
+        if (orderExtrasNames.length) {
+          labelEl.innerHTML = '总附加费用<span class="order-formula">（' + orderExtrasNames.join('；') + '）</span>';
+        } else {
+          labelEl.textContent = '总附加费用';
+        }
       }
       $('outOrderExtras').textContent = fmt(orderExtrasTotal);
     } else extraRow.style.display = 'none';
@@ -4296,30 +5719,138 @@ function generate() {
       discRow.style.display = 'flex';
       const labelEl = $('outOrderDiscountLabel');
       if (labelEl) {
-        labelEl.textContent = orderDiscountsNames.length
-          ? ('订单总优惠折扣（' + orderDiscountsNames.join('；') + '）')
-          : '订单总优惠折扣';
+        if (orderDiscountsNames.length) {
+          labelEl.innerHTML = '总优惠折扣<span class="order-formula">（' + orderDiscountsNames.join('；') + '）</span>';
+        } else {
+          labelEl.textContent = '总优惠折扣';
+        }
       }
       $('outOrderDiscount').textContent = '-' + fmt(orderDiscountTotal);
     } else discRow.style.display = 'none';
   }
 
-  /* 9. 应付金额 */
-  const payable = Math.max(0, orderSubtotal + orderExtrasTotal - orderDiscountTotal);
+  /* 服务费行（组/总二选一，互斥只会有一个） */
+  let _feeResultFinal = null;
+
+  /* 1) 先看有没有组服务费 */
+  let _groupFeeResult = null;
+  document.querySelectorAll('#groupsContainer .group-block').forEach(gb => {
+    if (_groupFeeResult) return;
+    const raw = gb.dataset.serviceFee;
+    if (!raw) return;
+    try {
+      const cfg = JSON.parse(raw);
+      if (!cfg || !cfg.platform) return;
+      const cg3 = calcGroup(gb);
+      const r = calcServiceFee(cfg.platform, cfg, cg3.groupTotal);
+      if (r) _groupFeeResult = r;
+    } catch (e) {}
+  });
+
+  if (_groupFeeResult) {
+    _feeResultFinal = _groupFeeResult;
+  } else {
+    /* 2) 没有组服务费 → 看订单级 */
+    const _feeCfgOS = getOrderServiceFeeConfig();
+    const _feeBaseOS = orderSubtotal + orderExtrasTotal - orderDiscountTotal;
+    _feeResultFinal = (_feeCfgOS && _feeCfgOS.platform)
+      ? calcServiceFee(_feeCfgOS.platform, _feeCfgOS, _feeBaseOS)
+      : null;
+  }
+
+  /* 3) 显示服务费（灰色小字） */
+  const osRow = $('outOrderServiceRow');
+  if (osRow) {
+    if (_feeResultFinal && _feeResultFinal.serviceFee > 0) {
+      osRow.style.display = 'flex';
+      const lbl = $('outOrderServiceLabel');
+      if (lbl) lbl.textContent = '服务费（' + _feeResultFinal.platformName + '）';
+      $('outOrderService').textContent = fmt(_feeResultFinal.serviceFee);
+    } else {
+      osRow.style.display = 'none';
+    }
+  }
+
+  /* 4) 显示通道费（灰色小字） */
+  const ocRow = $('outOrderChannelRow');
+  if (ocRow) {
+    if (_feeResultFinal && _feeResultFinal.channelFee > 0) {
+      ocRow.style.display = 'flex';
+      const lbl = $('outOrderChannelLabel');
+      if (lbl) lbl.textContent = '通道费（' + _feeResultFinal.platformName + '）';
+      $('outOrderChannel').textContent = fmt(_feeResultFinal.channelFee);
+    } else {
+      ocRow.style.display = 'none';
+    }
+  }
+
+  /* 9. 服务费累加 + 应付金额 */
+  let totalGroupService = 0;
+  let totalGroupChannel = 0;
+  document.querySelectorAll('#groupsContainer .group-block').forEach(gb => {
+    const raw = gb.dataset.serviceFee;
+    if (!raw) return;
+    let svcCfg = null;
+    try { svcCfg = JSON.parse(raw); } catch (e) { return; }
+    if (!svcCfg || !svcCfg.platform) return;
+    const cg3 = calcGroup(gb);
+    const r = calcServiceFee(svcCfg.platform, svcCfg, cg3.groupTotal);
+    if (!r) return;
+    if (r.addedToPayable) {
+      totalGroupService += r.serviceFee;
+      totalGroupChannel += r.channelFee;
+    }
+  });
+
+  const orderSvcCfg = getOrderServiceFeeConfig();
+  let orderService = 0;
+  let orderChannel = 0;
+  let orderServiceResult = null;
+  if (orderSvcCfg && orderSvcCfg.platform) {
+    orderServiceResult = calcServiceFee(orderSvcCfg.platform, orderSvcCfg, orderSubtotal + orderExtrasTotal - orderDiscountTotal);
+    if (orderServiceResult && orderServiceResult.addedToPayable) {
+      orderService = orderServiceResult.serviceFee;
+      orderChannel = orderServiceResult.channelFee;
+    }
+  }
+
+  const payable = Math.max(0,
+    orderSubtotal + orderExtrasTotal - orderDiscountTotal
+    + totalGroupService + totalGroupChannel
+    + orderService + orderChannel
+  );
   $('outPayable').textContent = fmt(payable);
 
-  /* 10. 预付款 */
+  /* 10. 预付款（定金只影响系统计算值；预付弹窗决定显示不显示） */
+  const depositOn = isDepositEnabled();
+  const prepaidCfg = getPrepaidConfig();
+  const prepaidHasValue = !!prepaidCfg.enabled;
+  const hasCustomPrepaid = (prepaidCfg.customAmount !== null
+                         && prepaidCfg.customAmount !== undefined
+                         && isFinite(Number(prepaidCfg.customAmount)));
+
   let prepaid = 0;
   let prepaidLabelText = '预付金额';
+  let showPrepaidRow = true;
+  let showFinalRow = true;
 
-  if (placeholderOn) {
-    /* 占位单：预付款 = 排单费 */
+  if (!prepaidHasValue) {
+    /* 用户在预付弹窗里选了"无预付款" → 不显示 */
+    prepaid = 0;
+    showPrepaidRow = false;
+    showFinalRow = false;
+  } else if (placeholderOn) {
+    /* 占位单：排单费 */
     prepaid = depositInput;
     prepaidLabelText = '预付金额（排单费：' + fmt(prepaid) + '）';
   } else {
-    /* 纯节点单：预付款 = 每个节点稿件的"第一个节点"金额之和 */
     const isPureNodeOrder = (totalItemCount > 0) && (nodeItemCount === totalItemCount);
-    if (isPureNodeOrder) {
+
+    if (!depositOn) {
+      /* 没开定金 → 系统值 0（等用户自定义） */
+      prepaid = 0;
+      prepaidLabelText = '预付金额（未设定金）';
+    } else if (isPureNodeOrder) {
       prepaid = 0;
       const details = [];
       nodeFirstDetail.forEach(d => {
@@ -4331,17 +5862,31 @@ function generate() {
       });
       prepaidLabelText = '预付金额（节点首款：' + details.join('；') + '）';
     } else {
-      /* 普通单：定金按百分比或固定金额 */
+      const orderBaseForDeposit = orderSubtotal + orderExtrasTotal - orderDiscountTotal;
       if (depositMode === 'percent') {
-        prepaid = payable * depositInput / 100;
-        prepaidLabelText = '预付金额（定金：' + fmt(payable) + ' × ' + pctShort(depositInput) + ' = ' + fmt(prepaid) + '）';
+        prepaid = orderBaseForDeposit * depositInput / 100;
+        prepaidLabelText = '预付金额（定金：' + fmt(orderBaseForDeposit) + ' × ' + pctShort(depositInput) + ' = ' + fmt(prepaid) + '）';
       } else {
         prepaid = depositInput;
         prepaidLabelText = '预付金额（定金：' + fmt(prepaid) + '）';
       }
     }
+
+    /* 自定义金额覆盖系统值 */
+    if (hasCustomPrepaid) {
+      prepaid = Number(prepaidCfg.customAmount);
+      prepaidLabelText = '预付金额';
+    }
+
+    /* 系统值和自定义值都是 0 → 不显示（避免出现"预付 ¥0"） */
+    if (prepaid === 0) {
+      showPrepaidRow = false;
+      showFinalRow = false;
+    }
   }
 
+  if ($('outPrepaidRow')) $('outPrepaidRow').style.display = showPrepaidRow ? 'flex' : 'none';
+  if ($('outFinalRow'))   $('outFinalRow').style.display   = showFinalRow   ? 'flex' : 'none';
   if ($('outPrepaidLabel')) $('outPrepaidLabel').textContent = prepaidLabelText;
   $('outPrepaid').textContent = fmt(prepaid);
 
@@ -4362,8 +5907,9 @@ function generate() {
     if ($('outRealPrepaidRow')) $('outRealPrepaidRow').style.display = 'none';
   }
 
-  /* 12. 待结尾款 */
-  const finalPay = Math.max(0, payable - prepaid);
+  /* 12. 待结尾款（用户实收，不含服务费） */
+  const _totalSvcAll = totalGroupService + totalGroupChannel + orderService + orderChannel;
+  const finalPay = Math.max(0, payable - prepaid - _totalSvcAll);
   $('outFinal').textContent = fmt(finalPay);
 
   /* 13. 赠品 */
@@ -4643,7 +6189,8 @@ function renderTodoCard(t) {
   const id = escapeAttr(t.id);
   const isPlaceholder = !!t.isPlaceholder;
   const isPending = isTodoPending(t);
-  const titleHtml = escapeHtml(formatTodoTitle(t));
+  const orderNoHtml = t.orderNo ? `<span class="order-no-inline"> · ${escapeHtml(t.orderNo)}</span>` : '';
+  const titleHtml = escapeHtml(formatTodoTitle(t)) + orderNoHtml;
 
   const st = __orderManageState.todo;
   const isSelected = !!st.selected[t.id];
@@ -4782,6 +6329,17 @@ function openTodoDetail(id) {
   const sorted = getSortedTodos();
   const withNum = sorted.find(x => x.id === id) || t;
   $('tdTitle').textContent = formatTodoTitle(withNum);
+
+  const noEl = $('tdOrderNo');
+  if (noEl) {
+    if (t.orderNo) {
+      noEl.textContent = '订单编号：' + t.orderNo;
+      noEl.style.display = '';
+    } else {
+      noEl.textContent = '';
+      noEl.style.display = 'none';
+    }
+  }
 
   /* 标签文案：占位单说"开单日期"，普通单说"截稿日期" */
   if ($('tdDeadlineLabel')) $('tdDeadlineLabel').textContent = t.isPlaceholder ? '开单日期' : '截稿日期';
@@ -5343,7 +6901,10 @@ function captureReceiptFormSnapshot() {
       });
     });
 
-    groups.push({ title: titleEl ? titleEl.value : '', items, extras, discounts });
+    let serviceFeeCfg = null;
+    const svcRaw = gb.dataset.serviceFee;
+    if (svcRaw) { try { serviceFeeCfg = JSON.parse(svcRaw); } catch (e) {} }
+    groups.push({ title: titleEl ? titleEl.value : '', items, extras, discounts, serviceFee: serviceFeeCfg });
   });
 
   const extras = [];
@@ -5376,14 +6937,21 @@ function captureReceiptFormSnapshot() {
     scheduleDate: $('scheduleDate') ? $('scheduleDate').value : '',
     workDays:     $('workDays')     ? $('workDays').value     : '',
     project:      $('project')      ? $('project').value      : '',
+    ip:           $('ip')           ? $('ip').value           : '',
     attribute:    $('attribute')    ? $('attribute').value    : '',
+    artistIdentity: $('artistIdentity') ? $('artistIdentity').value : '',
+    artistId:       $('artistId')       ? $('artistId').value       : '',
     character:    $('character')    ? $('character').value    : '',
     depositMode:  $('depositMode')  ? $('depositMode').value  : 'percent',
     deposit:      $('deposit')      ? $('deposit').value      : '20',
     placeholder:  $('placeholderToggle') ? $('placeholderToggle').checked : false,
     groups, extras, discounts, gifts,
     previewImage: previewImageData || '',
-    receiptTags: (window.__receiptTags || []).slice()
+    receiptTags: (window.__receiptTags || []).slice(),
+    algorithmSettings: getAlgorithmSettings(),
+    depositEnabled: isDepositEnabled(),
+    prepaidConfig: JSON.parse(JSON.stringify(getPrepaidConfig())),
+    orderServiceFee: getOrderServiceFeeConfig()
   };
 }
 
@@ -5402,7 +6970,16 @@ function restoreReceiptFormSnapshot(snap) {
   if ($('scheduleDate')) $('scheduleDate').value = snap.scheduleDate || '';
   if ($('workDays'))     $('workDays').value     = snap.workDays     || '';
   if ($('project'))      $('project').value      = snap.project      || '';
+  if ($('ip'))           $('ip').value           = snap.ip           || '';
   if ($('attribute'))    $('attribute').value    = snap.attribute    || '';
+
+  /* 画师/美工（老订单快照没有这两个字段 → 回退到设置里的值） */
+  if ($('artistIdentity')) {
+    $('artistIdentity').value = snap.artistIdentity || getDefaultIdentity();
+  }
+  if ($('artistId')) {
+    $('artistId').value = snap.artistId || getSavedArtistName();
+  }
   if ($('character'))    $('character').value    = snap.character    || '';
   if ($('depositMode'))  $('depositMode').value  = snap.depositMode  || 'percent';
   if ($('deposit'))      $('deposit').value      = (snap.deposit !== undefined && snap.deposit !== '') ? snap.deposit : '20';
@@ -5454,6 +7031,14 @@ function restoreReceiptFormSnapshot(snap) {
 
     (g.extras || []).forEach(ex => addGroupExtra(gb, ex));
     (g.discounts || []).forEach(dc => addGroupDiscount(gb, dc));
+
+    /* 恢复组服务费 */
+    if (g.serviceFee) {
+      gb.dataset.serviceFee = JSON.stringify(g.serviceFee);
+    } else {
+      delete gb.dataset.serviceFee;
+    }
+    if (typeof updateGroupServiceDisplay === 'function') updateGroupServiceDisplay(gb);
   });
 
   /* 订单级附加 / 优惠 / 赠品 */
@@ -5498,7 +7083,30 @@ function restoreReceiptFormSnapshot(snap) {
   window.__receiptTags = (snap.receiptTags || []).slice();
   updateReceiptTagBtn();
 
+  /* 定金开关 */
+  if ($('depositEnabled')) {
+    $('depositEnabled').checked = (snap.depositEnabled === undefined) ? true : !!snap.depositEnabled;
+  }
+  if (typeof updateDepositInputDisabled === 'function') updateDepositInputDisabled();
+
+  /* 预付配置 */
+  if (snap.prepaidConfig) {
+    setPrepaidConfig(JSON.parse(JSON.stringify(snap.prepaidConfig)));
+  } else {
+    setPrepaidConfig({ enabled: true, customAmount: null });
+  }
+  if (typeof updatePrepaidBtnState === 'function') updatePrepaidBtnState();
+
+  /* 订单级服务费 */
+  if (snap.orderServiceFee) {
+    setOrderServiceFeeConfig(JSON.parse(JSON.stringify(snap.orderServiceFee)));
+  } else {
+    setOrderServiceFeeConfig(null);
+  }
+  if (typeof updateOrderServiceBtnState === 'function') updateOrderServiceBtnState();
+
   renumberGroups();
+  if (typeof refreshAllGroupSubtotals === 'function') refreshAllGroupSubtotals();
 }
 
 
@@ -5577,6 +7185,7 @@ function doConvertPlaceholder(useDeduct) {
   if (!t) { alert('订单不存在'); return; }
 
   const placeholderPrepaid = Number(t.prepaid) || 0;
+  window.__currentOrderNo = t.orderNo || '';
 
   /* 记下上下文，等 importToTodo 时使用 */
   window.__editingTodoId = t.id;
@@ -5637,6 +7246,7 @@ function editTodoReceipt() {
   if (!t) { alert('订单不存在'); return; }
 
   window.__editingTodoId = t.id;
+  window.__currentOrderNo = t.orderNo || '';
 
   if ($('client'))       $('client').value       = t.clientId || '';
   if ($('orderDate'))    $('orderDate').value    = t.orderDate || '';
@@ -5791,6 +7401,7 @@ async function importToTodo() {
       t.prepaid         = amounts.prepaid;
       t.originalFinal   = amounts.final;
       t.updatedAt       = Date.now();
+      if (!t.orderNo) t.orderNo = window.__currentOrderNo || makeOrderNo(t.orderDate || orderDateVal);
 
       if (receiptImageRef) {
         t.receiptImage = receiptImageRef;
@@ -5848,6 +7459,7 @@ async function importToTodo() {
       window.__convertDeduct = false;
       window.__placeholderPrepaid = 0;
       window.__receiptImported = true;
+      window.__currentOrderNo = '';
       window.__receiptTags = [];
       updateReceiptTagBtn();
 
@@ -5901,6 +7513,7 @@ async function importToTodo() {
     createdAt: Date.now(),
     updatedAt: Date.now(),
     number: 0,
+    orderNo: window.__currentOrderNo || makeOrderNo(orderDateVal),
   };
 
   todos.push(t);
@@ -5914,6 +7527,7 @@ async function importToTodo() {
   }
 
   window.__receiptImported = true;
+  window.__currentOrderNo = '';
   window.__receiptTags = [];
   updateReceiptTagBtn();
 
@@ -5951,12 +7565,19 @@ function calcSnapshotAmounts(snap) {
 
   if (!snap.groups) return result;
 
-  let orderSubtotal  = 0;
+  const alg = (snap.algorithmSettings && typeof snap.algorithmSettings === 'object')
+    ? Object.assign({}, DEFAULT_ALGORITHM_SETTINGS, snap.algorithmSettings)
+    : Object.assign({}, DEFAULT_ALGORITHM_SETTINGS);
+
+  let sumGroupOriginal = 0;
+  let sumGroupSubtotal = 0;
+  let sumGroupTotal    = 0;
   let totalItemCount = 0;
   let nodeItemCount  = 0;
   let nodeFirstTotal = 0;
 
   (snap.groups || []).forEach(g => {
+    let groupOriginal = 0;
     let groupSubtotal = 0;
 
     (g.items || []).forEach(it => {
@@ -5966,7 +7587,6 @@ function calcSnapshotAmounts(snap) {
 
       totalItemCount++;
 
-      /* 增项合计 */
       let addonSum = 0;
       (it.subItems || []).forEach(si => {
         if (si.isNode) return;
@@ -5976,23 +7596,16 @@ function calcSnapshotAmounts(snap) {
       });
 
       const baseUnit = price + addonSum;
+      const itemOriginalTotal = baseUnit * qty;
+      const itemTotal = itemOriginalTotal * m;
 
-      /* 节点 */
+      groupOriginal += itemOriginalTotal;
+      groupSubtotal += itemTotal;
+
       const nodeItems = (it.subItems || []).filter(si => si.isNode);
       const hasNodes  = nodeItems.length > 0;
       if (hasNodes) nodeItemCount++;
 
-      let nodeSum = 0;
-      nodeItems.forEach(si => {
-        const sv = Number(si.value) || 0;
-        nodeSum += baseUnit * sv / 100;
-      });
-
-      const partsUnitSum = hasNodes ? nodeSum : baseUnit;
-      const sub = partsUnitSum * qty * m;
-      groupSubtotal += sub;
-
-      /* 纯节点单的预付款：记下每个节点稿件的第一个节点金额 */
       if (hasNodes) {
         const firstNode = nodeItems[0];
         const firstUnit = baseUnit * (Number(firstNode.value) || 0) / 100;
@@ -6000,56 +7613,154 @@ function calcSnapshotAmounts(snap) {
       }
     });
 
-    /* 组附加 */
+    /* 组附加（按算法） */
+    const geBase = calcGroupExtraBase(alg.groupExtra, groupOriginal, groupSubtotal);
     let extras = 0;
     (g.extras || []).forEach(ex => {
       const v = Number(ex.value) || 0;
-      extras += (ex.op === 'multiply') ? groupSubtotal * v / 100 : v;
+      if (ex.op === 'multiply') {
+        extras += (alg.groupExtra === 'fixed') ? 0 : (geBase * v / 100);
+      } else {
+        extras += v;
+      }
     });
 
-    /* 组优惠（基数是组小计 + 组附加） */
+    /* 组折扣（按算法） */
+    const gdBase = calcGroupDiscountBase(
+      alg.groupDiscount, groupOriginal, groupSubtotal, extras
+    );
     let discounts = 0;
-    const base = groupSubtotal + extras;
     (g.discounts || []).forEach(dc => {
       const v = Number(dc.value) || 0;
-      discounts += (dc.op === 'multiply') ? base * v / 100 : v;
+      if (dc.op === 'multiply') {
+        discounts += (alg.groupDiscount === 'fixed') ? 0 : (gdBase * v / 100);
+      } else {
+        discounts += v;
+      }
     });
 
-    orderSubtotal += groupSubtotal + extras - discounts;
+    sumGroupOriginal += groupOriginal;
+    sumGroupSubtotal += groupSubtotal;
+    sumGroupTotal    += (groupSubtotal + extras - discounts);
   });
 
-  /* 订单级附加 / 优惠 */
+  const orderSubtotal = sumGroupTotal;
+
+  /* 订单级附加（按算法） */
+  const oeBase = calcOrderExtraBase(alg.orderExtra, sumGroupOriginal, sumGroupSubtotal, sumGroupTotal);
   let orderExtras = 0;
   (snap.extras || []).forEach(ex => {
     const v = Number(ex.value) || 0;
-    orderExtras += (ex.op === 'multiply') ? orderSubtotal * v / 100 : v;
+    if (ex.op === 'multiply') {
+      orderExtras += (alg.orderExtra === 'fixed') ? 0 : (oeBase * v / 100);
+    } else {
+      orderExtras += v;
+    }
   });
 
+  /* 订单级折扣（按算法） */
+  const odBase = calcOrderDiscountBase(
+    alg.orderDiscount, sumGroupOriginal, sumGroupSubtotal, sumGroupTotal, orderExtras
+  );
   let orderDiscounts = 0;
   (snap.discounts || []).forEach(dc => {
     const v = Number(dc.value) || 0;
-    orderDiscounts += (dc.op === 'multiply') ? orderSubtotal * v / 100 : v;
+    if (dc.op === 'multiply') {
+      orderDiscounts += (alg.orderDiscount === 'fixed') ? 0 : (odBase * v / 100);
+    } else {
+      orderDiscounts += v;
+    }
   });
 
-  const payable = Math.max(0, orderSubtotal + orderExtras - orderDiscounts);
+  /* 组服务费 / 通道费（含 addedToPayable 判定） */
+  let sumGroupService = 0;
+  let sumGroupChannel = 0;
+  (snap.groups || []).forEach(g => {
+    if (!g.serviceFee || !g.serviceFee.platform) return;
+    let gOrig = 0, gSub = 0;
+    (g.items || []).forEach(it => {
+      const price = Number(it.price) || 0;
+      const qty = Number(it.qty) || 1;
+      const m = getLicenseMultiplier(it.license);
+      let addonSum = 0;
+      (it.subItems || []).forEach(si => {
+        if (si.isNode) return;
+        const sv = Number(si.value) || 0;
+        if (si.op === 'multiply') addonSum += price * sv / 100;
+        else addonSum += sv;
+      });
+      const bu = price + addonSum;
+      gOrig += bu * qty;
+      gSub += bu * qty * m;
+    });
+    const geBase = calcGroupExtraBase(alg.groupExtra, gOrig, gSub);
+    let ge = 0;
+    (g.extras || []).forEach(ex => {
+      const v = Number(ex.value) || 0;
+      ge += (ex.op === 'multiply') ? ((alg.groupExtra === 'fixed') ? 0 : (geBase * v / 100)) : v;
+    });
+    const gdBase = calcGroupDiscountBase(alg.groupDiscount, gOrig, gSub, ge);
+    let gd = 0;
+    (g.discounts || []).forEach(dc => {
+      const v = Number(dc.value) || 0;
+      gd += (dc.op === 'multiply') ? ((alg.groupDiscount === 'fixed') ? 0 : (gdBase * v / 100)) : v;
+    });
+    const groupTotal = gSub + ge - gd;
+    const r = calcServiceFee(g.serviceFee.platform, g.serviceFee, groupTotal);
+    if (!r) return;
+    if (r.addedToPayable) {
+      sumGroupService += r.serviceFee;
+      sumGroupChannel += r.channelFee;
+    }
+  });
 
-  /* 预付款 */
-  let prepaid = 0;
-  const isPureNodeOrder = (totalItemCount > 0) && (nodeItemCount === totalItemCount);
-
-  if (isPureNodeOrder) {
-    prepaid = nodeFirstTotal;
-  } else {
-    const depVal = Number(snap.deposit) || 0;
-    if (snap.depositMode === 'amount') {
-      prepaid = depVal;
-    } else {
-      prepaid = payable * depVal / 100;
+  const orderTmpBase = orderSubtotal + orderExtras - orderDiscounts;
+  let orderService = 0;
+  let orderChannel = 0;
+  if (snap.orderServiceFee && snap.orderServiceFee.platform) {
+    const r = calcServiceFee(snap.orderServiceFee.platform, snap.orderServiceFee, orderTmpBase);
+    if (r && r.addedToPayable) {
+      orderService = r.serviceFee;
+      orderChannel = r.channelFee;
     }
   }
 
-  const final = Math.max(0, payable - prepaid);
+  const payable = Math.max(0,
+    orderTmpBase + sumGroupService + sumGroupChannel + orderService + orderChannel
+  );
 
+  /* 预付款（定金只影响系统值；预付弹窗决定有没有） */
+  const depositOn = (snap.depositEnabled === undefined) ? true : !!snap.depositEnabled;
+  const prepaidCfg = snap.prepaidConfig || { enabled: true, customAmount: null };
+  const prepaidHasValue = !!prepaidCfg.enabled;
+  const hasCustomPrepaid = (prepaidCfg.customAmount !== null
+                         && prepaidCfg.customAmount !== undefined
+                         && isFinite(Number(prepaidCfg.customAmount)));
+
+  let prepaid = 0;
+  if (!prepaidHasValue) {
+    prepaid = 0;
+  } else {
+    const isPureNodeOrder = (totalItemCount > 0) && (nodeItemCount === totalItemCount);
+    if (!depositOn) {
+      prepaid = 0;
+    } else if (isPureNodeOrder) {
+      prepaid = nodeFirstTotal;
+    } else {
+      const depVal = Number(snap.deposit) || 0;
+      if (snap.depositMode === 'amount') {
+        prepaid = depVal;
+      } else {
+        prepaid = payable * depVal / 100;
+      }
+    }
+    if (hasCustomPrepaid) {
+      prepaid = Number(prepaidCfg.customAmount);
+    }
+  }
+
+  const _totalSvc = sumGroupService + sumGroupChannel + orderService + orderChannel;
+  const final = Math.max(0, payable - prepaid - _totalSvc);
   return { payable, prepaid, final };
 }
 
@@ -6403,62 +8114,7 @@ function confirmSettleDiscount() {
 function settleReceived() {
   const state = window.__settleState;
   if (!state) { closeModal(); return; }
-
-  const todos = getTodos();
-  const idx = todos.findIndex(x => x.id === state.id);
-  if (idx < 0) { closeModal(); return; }
-
-  const t = todos[idx];
-  const today = fmtDateStr(new Date());
-  const totalReceived = state.prepaid + state.finalAmount;
-
-  /* 存结单记录 */
-  const completed = addCompleted({
-    todoId: t.id,
-    clientId: t.clientId || '',
-    clientName: t.clientName || '未命名',
-    platform: t.platform || '',
-    contact: t.contact || '',
-    contactType: normalizeContactType(t.contactType),
-    orderDate: t.orderDate || '',
-    scheduleDate: t.scheduleDate || '',
-    deadline: t.deadline || '',
-    completedDate: today,
-    prepaid: state.prepaid,
-    originalFinal: state.originalFinal,
-    discount: state.discountAmount || 0,
-    finalAmount: state.finalAmount,
-    totalReceived: totalReceived,
-    isPlaceholder: false,
-    receiptImage: t.receiptImage || '',
-    receiptSnapshot: t.receiptSnapshot || null,
-    tags: (t.tags || []).slice(),
-  });
-
-  if (!completed) { closeModal(); return; }
-
-  /* 记尾款流水 */
-  if (state.finalAmount > 0) {
-    addFlow('final', state.finalAmount, '尾款 · ' + (t.clientName || '未命名'), today, {
-      todoId: t.id,
-      completedId: completed.id,
-    });
-  }
-
-  /* 从待办列表移除 */
-  const newTodos = todos.filter(x => x.id !== state.id);
-  setTodos(newTodos);
-
-  window.__settleState = null;
-  closeModal();
-
-  showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
-
-  renderTodoList();
-  if (typeof renderCompletedList === 'function') renderCompletedList();
-  if (typeof renderSchedule === 'function') renderSchedule();
-  if (typeof renderStatsPage === 'function') renderStatsPage();
-  if (typeof renderMasterList === 'function') renderMasterList();
+  prepareSettleFinal(state.id, state);
 }
 
 /* 尚未收到：标记为待结 */
@@ -6494,13 +8150,23 @@ function settlePendingConfirm(id) {
   const t = todos.find(x => x.id === id);
   if (!t) return;
 
-  const pendingAmount = Number(t.pendingAmount) || 0;
+  /* 从快照重新算一遍，确保服务费被扣掉 */
+  let freshAmounts = null;
+  try {
+    if (t.receiptSnapshot) {
+      freshAmounts = calcSnapshotAmounts(t.receiptSnapshot);
+    }
+  } catch (e) {}
+
+  const pendingAmount = (freshAmounts && freshAmounts.final > 0)
+    ? freshAmounts.final
+    : (Number(t.pendingAmount) || 0);
   const originalFinal = Number(t.originalFinal) || 0;
 
   window.__settleState = {
     id: id,
-    payable: Number(t.payable) || 0,
-    prepaid: Number(t.prepaid) || 0,
+    payable: (freshAmounts && freshAmounts.payable) || Number(t.payable) || 0,
+    prepaid: (freshAmounts && freshAmounts.prepaid) || Number(t.prepaid) || 0,
     originalFinal: originalFinal,
     pendingMode: true,
     finalAmount: pendingAmount,
@@ -6532,15 +8198,235 @@ function settlePendingConfirm(id) {
 function settlePendingReceived() {
   const state = window.__settleState;
   if (!state) { closeModal(); return; }
+  prepareSettleFinal(state.id, state);
+}
+/* ═══════════════════════════════════════════════════════
+   [M-02B] 结单确认实收 + 结单小票（新增）
+   ═══════════════════════════════════════════════════════ */
+
+var __settleFinalState = null;
+
+/* 计算快照里的服务费合计 */
+function calcSnapshotServiceFee(snap) {
+  const out = { groupService: 0, groupChannel: 0, orderService: 0, orderChannel: 0 };
+  if (!snap) return out;
+
+  const alg = (snap.algorithmSettings && typeof snap.algorithmSettings === 'object')
+    ? Object.assign({}, DEFAULT_ALGORITHM_SETTINGS, snap.algorithmSettings)
+    : Object.assign({}, DEFAULT_ALGORITHM_SETTINGS);
+
+  /* 算单个组的组合计 */
+  function calcOneGroupTotal(g) {
+    let gOrig = 0, gSub = 0;
+    (g.items || []).forEach(it => {
+      const price = Number(it.price) || 0;
+      const qty = Number(it.qty) || 1;
+      const m = getLicenseMultiplier(it.license);
+      let addonSum = 0;
+      (it.subItems || []).forEach(si => {
+        if (si.isNode) return;
+        const sv = Number(si.value) || 0;
+        if (si.op === 'multiply') addonSum += price * sv / 100;
+        else addonSum += sv;
+      });
+      const bu = price + addonSum;
+      gOrig += bu * qty;
+      gSub += bu * qty * m;
+    });
+    const geBase = calcGroupExtraBase(alg.groupExtra, gOrig, gSub);
+    let ge = 0;
+    (g.extras || []).forEach(ex => {
+      const v = Number(ex.value) || 0;
+      ge += (ex.op === 'multiply') ? ((alg.groupExtra === 'fixed') ? 0 : (geBase * v / 100)) : v;
+    });
+    const gdBase = calcGroupDiscountBase(alg.groupDiscount, gOrig, gSub, ge);
+    let gd = 0;
+    (g.discounts || []).forEach(dc => {
+      const v = Number(dc.value) || 0;
+      gd += (dc.op === 'multiply') ? ((alg.groupDiscount === 'fixed') ? 0 : (gdBase * v / 100)) : v;
+    });
+    return { gOrig, gSub, groupTotal: gSub + ge - gd };
+  }
+
+  /* 组服务费 */
+  let sumGroupTotal = 0;
+  let sumOrig = 0, sumSub = 0;
+  (snap.groups || []).forEach(g => {
+    const r = calcOneGroupTotal(g);
+    sumGroupTotal += r.groupTotal;
+    sumOrig += r.gOrig;
+    sumSub += r.gSub;
+
+    if (!g.serviceFee || !g.serviceFee.platform) return;
+    const svcR = calcServiceFee(g.serviceFee.platform, g.serviceFee, r.groupTotal);
+    if (svcR && svcR.addedToPayable) {
+      out.groupService += svcR.serviceFee;
+      out.groupChannel += svcR.channelFee;
+    }
+  });
+
+  /* 总服务费（基数 = 订单总价，不含服务费） */
+  const oeBase = calcOrderExtraBase(alg.orderExtra, sumOrig, sumSub, sumGroupTotal);
+  let oe = 0;
+  (snap.extras || []).forEach(ex => {
+    const v = Number(ex.value) || 0;
+    oe += (ex.op === 'multiply') ? ((alg.orderExtra === 'fixed') ? 0 : (oeBase * v / 100)) : v;
+  });
+  const odBase = calcOrderDiscountBase(alg.orderDiscount, sumOrig, sumSub, sumGroupTotal, oe);
+  let od = 0;
+  (snap.discounts || []).forEach(dc => {
+    const v = Number(dc.value) || 0;
+    od += (dc.op === 'multiply') ? ((alg.orderDiscount === 'fixed') ? 0 : (odBase * v / 100)) : v;
+  });
+  const orderTotalNoService = sumGroupTotal + oe - od;
+
+  if (snap.orderServiceFee && snap.orderServiceFee.platform) {
+    const svcR = calcServiceFee(snap.orderServiceFee.platform, snap.orderServiceFee, orderTotalNoService);
+    if (svcR && svcR.addedToPayable) {
+      out.orderService += svcR.serviceFee;
+      out.orderChannel += svcR.channelFee;
+    }
+  }
+
+  return out;
+}
+
+/* 从 settleState 准备"核对实收"弹窗的数据 */
+function prepareSettleFinal(todoId, state) {
+  const todos = getTodos();
+  const t = todos.find(x => x.id === todoId);
+  if (!t) { closeModal(); return; }
+
+  const svc = t.receiptSnapshot ? calcSnapshotServiceFee(t.receiptSnapshot) : null;
+  const serviceTotal = svc ? (svc.groupService + svc.groupChannel + svc.orderService + svc.orderChannel) : 0;
+  let serviceLabel = '';
+  if (svc && (svc.orderService > 0 || svc.orderChannel > 0)) serviceLabel = '总服务费';
+  else if (svc && (svc.groupService > 0 || svc.groupChannel > 0)) serviceLabel = '组服务费合计';
+
+  __settleFinalState = {
+    todoId: todoId,
+    payable: state.payable,
+    prepaid: state.prepaid,
+    originalFinal: state.originalFinal,
+    discount: state.discountAmount || 0,
+    systemFinal: state.finalAmount,
+    finalAmount: state.finalAmount,
+    totalReceived: state.prepaid + state.finalAmount,
+    serviceFee: serviceTotal,
+    serviceFeeLabel: serviceLabel,
+  };
+
+  openSettleFinalConfirmModal();
+}
+
+/* 核对实收弹窗 */
+function openSettleFinalConfirmModal() {
+  const s = __settleFinalState;
+  if (!s) return;
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal settle-final-modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>核对实收</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="fee-calc-block">
+            <div class="fee-calc-title">订单概要</div>
+            <div class="fee-calc-row"><span>应付款</span><span>${fmt(s.payable)}</span></div>
+            <div class="fee-calc-row"><span>预付款（已收）</span><span>${fmt(s.prepaid)}</span></div>
+            <div class="fee-calc-row"><span>原尾款</span><span>${fmt(s.originalFinal)}</span></div>
+            ${s.discount > 0 ? `<div class="fee-calc-row"><span>尾款优惠</span><span>-${fmt(s.discount)}</span></div>` : ''}
+          </div>
+
+          <label style="margin-top:16px;">最终确认的尾款</label>
+          <div class="input-unit-wrap prefix">
+            <input type="number" step="0.01" inputmode="decimal" id="settleFinalTail"
+                   value="${num2(s.finalAmount)}" oninput="onSettleFinalInput('tail', this.value)" />
+            <span class="input-unit">¥</span>
+          </div>
+
+          ${s.serviceFee > 0 ? `
+          <div class="fee-calc-block" style="margin-top:16px;">
+            <div class="fee-calc-row"><span>${escapeHtml(s.serviceFeeLabel || '服务费')}</span><span>${fmt(s.serviceFee)}</span></div>
+            <div class="fee-calc-row" style="font-size:11.5px;color:var(--ink-soft);"><span>（平台收取，不计入实收）</span><span></span></div>
+          </div>` : ''}
+
+          <label style="margin-top:16px;">总实收（不含服务费）</label>
+          <div class="input-unit-wrap prefix">
+            <input type="number" step="0.01" inputmode="decimal" id="settleFinalTotal"
+                   value="${num2(s.totalReceived)}" oninput="onSettleFinalInput('total', this.value)" />
+            <span class="input-unit">¥</span>
+          </div>
+
+          <div class="actions" style="justify-content:flex-end;margin-top:22px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" onclick="confirmFinalSettle()">确定</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function onSettleFinalInput(which, value) {
+  const s = __settleFinalState;
+  if (!s) return;
+  const v = Number(value);
+  if (!isFinite(v)) return;
+
+  if (which === 'tail') {
+    s.finalAmount = v;
+    s.totalReceived = s.prepaid + v;
+    const el = $('settleFinalTotal');
+    if (el) el.value = num2(s.totalReceived);
+  } else {
+    s.totalReceived = v;
+    s.finalAmount = v - s.prepaid;
+    const el = $('settleFinalTail');
+    if (el) el.value = num2(s.finalAmount);
+  }
+}
+
+async function confirmFinalSettle() {
+  const s = __settleFinalState;
+  if (!s) return;
 
   const todos = getTodos();
-  const idx = todos.findIndex(x => x.id === state.id);
+  const idx = todos.findIndex(x => x.id === s.todoId);
   if (idx < 0) { closeModal(); return; }
 
   const t = todos[idx];
   const today = fmtDateStr(new Date());
-  const totalReceived = state.prepaid + state.finalAmount;
 
+  /* ★ 原地：把弹窗 C 的内容替换成"正在生成"提示，弹窗不消失 */
+  const modalBody = document.querySelector('.settle-final-modal .modal-body');
+  if (modalBody) {
+    modalBody.innerHTML = `
+      <div class="settle-inline-loading">
+        <div class="settle-loading-spinner"></div>
+        <div class="settle-loading-text">正在生成结单小票...</div>
+      </div>
+    `;
+  }
+  const modalHeadTitle = document.querySelector('.settle-final-modal .modal-head h3');
+  if (modalHeadTitle) modalHeadTitle.textContent = '结单中';
+  const modalCloseBtn = document.querySelector('.settle-final-modal .modal-head .icon-btn');
+  if (modalCloseBtn) modalCloseBtn.style.display = 'none';
+
+  /* 等一帧，确保 loading 先渲染出来 */
+  await new Promise(r => requestAnimationFrame(r));
+  await new Promise(r => setTimeout(r, 60));
+
+  /* 生成结单小票（失败不阻断结单） */
+  let finalReceiptRef = '';
+  try {
+    finalReceiptRef = await generateFinalReceipt(t, s);
+  } catch (e) {
+    console.warn('结单小票生成失败', e);
+  }
+
+  /* 存结单记录 */
   const completed = addCompleted({
     todoId: t.id,
     clientId: t.clientId || '',
@@ -6552,41 +8438,266 @@ function settlePendingReceived() {
     scheduleDate: t.scheduleDate || '',
     deadline: t.deadline || '',
     completedDate: today,
-    prepaid: state.prepaid,
-    originalFinal: state.originalFinal,
-    discount: state.discountAmount || 0,
-    finalAmount: state.finalAmount,
-    totalReceived: totalReceived,
+    prepaid: s.prepaid,
+    originalFinal: s.originalFinal,
+    discount: s.discount || 0,
+    finalAmount: s.finalAmount,
+    totalReceived: s.totalReceived,
+    serviceFee: s.serviceFee || 0,
     isPlaceholder: false,
-    receiptImage: t.receiptImage || '',
+    receiptImage: finalReceiptRef || t.receiptImage || '',
     receiptSnapshot: t.receiptSnapshot || null,
     tags: (t.tags || []).slice(),
+    orderNo: t.orderNo || '',
   });
 
   if (!completed) { closeModal(); return; }
 
-  if (state.finalAmount > 0) {
-    addFlow('final', state.finalAmount, '尾款 · ' + (t.clientName || '未命名'), today, {
+  /* 记尾款流水（负尾款 → 退款流水） */
+  if (s.finalAmount > 0) {
+    addFlow('final', s.finalAmount, '尾款 · ' + (t.clientName || '未命名'), today, {
+      todoId: t.id,
+      completedId: completed.id,
+    });
+  } else if (s.finalAmount < 0) {
+    addFlow('refund', Math.abs(s.finalAmount), '结单退款 · ' + (t.clientName || '未命名'), today, {
       todoId: t.id,
       completedId: completed.id,
     });
   }
 
-  const newTodos = todos.filter(x => x.id !== state.id);
-  setTodos(newTodos);
+  /* 从待办移除 */
+  setTodos(todos.filter(x => x.id !== s.todoId));
 
   window.__settleState = null;
-  closeModal();
+  window.__settleFinalState = null;
 
-  showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
-
+  /* 刷新 */
   renderTodoList();
   if (typeof renderCompletedList === 'function') renderCompletedList();
   if (typeof renderSchedule === 'function') renderSchedule();
   if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
+
+  /* 弹结单小票（原地替换 modalRoot，不会有空白瞬间） */
+  if (finalReceiptRef) {
+    openFinalReceiptModal(finalReceiptRef);
+  } else {
+    closeModal();
+    showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
+  }
 }
 
+/* 生成结单小票（临时借用小票页 DOM 截图，然后恢复用户原状） */
+/* 等待某个容器里的所有 img 加载完（或超时） */
+function waitForImagesIn(root, timeout) {
+  if (!root) return Promise.resolve();
+  const imgs = Array.from(root.querySelectorAll('img'));
+  if (!imgs.length) return Promise.resolve();
+  return Promise.all(imgs.map(img => {
+    if (img.complete && img.naturalWidth > 0) return Promise.resolve();
+    return new Promise(resolve => {
+      let done = false;
+      const finish = () => { if (!done) { done = true; resolve(); } };
+      img.addEventListener('load', finish, { once: true });
+      img.addEventListener('error', finish, { once: true });
+      setTimeout(finish, timeout || 1500);
+    });
+  }));
+}
+
+async function generateFinalReceipt(todo, settleState) {
+  const backupSnap = captureReceiptFormSnapshot();
+  const backupEditingId = window.__editingTodoId;
+  const backupOrderNo = window.__currentOrderNo;
+
+  const backupGenerated  = window.__receiptGenerated;
+  const backupImported   = window.__receiptImported;
+  const backupWarnIgnore = window.__receiptWarnIgnore;
+
+  /* ★ 拿真实的小票 DOM（不克隆，直接借用） */
+  const receiptEl = $('receipt');
+  if (!receiptEl) return '';
+
+  const originalParent = receiptEl.parentNode;
+  const originalNextSibling = receiptEl.nextSibling;
+  let offscreen = null;
+
+  try {
+    /* 1. 把订单快照写进小票页的 DOM */
+    if (todo.receiptSnapshot) {
+      restoreReceiptFormSnapshot(todo.receiptSnapshot);
+    }
+    const layout = $('receiptLayout');
+    if (layout) layout.classList.remove('settings-open');
+
+    /* 2. 调 generate 让 DOM 与数据同步 */
+    try { generate(); } catch (e) { console.warn('generate 失败', e); }
+
+    /* 3. 等一帧 */
+    await new Promise(r => requestAnimationFrame(r));
+
+    /* 4. 建屏幕外容器 */
+    offscreen = document.createElement('div');
+    offscreen.style.cssText = [
+      'position: fixed',
+      'left: -99999px',
+      'top: 0',
+      'width: 560px',
+      'background: #ffffff',
+      'pointer-events: none',
+      'z-index: -1',
+    ].join(';');
+    document.body.appendChild(offscreen);
+
+    /* 5. ★ 关键：把真实的小票 DOM 移到屏幕外（不是克隆，保留所有内联 CSS 变量） */
+    offscreen.appendChild(receiptEl);
+
+    /* 6. 改付款区（改的是真实的 DOM） */
+    const payTotals = receiptEl.querySelector('.pay-totals');
+    let originalPayHTML = '';
+    if (payTotals) {
+      originalPayHTML = payTotals.innerHTML;
+
+      const payableRow = payTotals.querySelector('.row.pay');
+      if (payableRow) {
+        const labelSpan = payableRow.querySelector('span:first-child');
+        const valueSpan = payableRow.querySelector('span.v');
+        if (labelSpan) {
+          labelSpan.innerHTML = '实付金额<span style="font-size:0.7em;font-weight:400;color:#555;margin-left:4px;">（不含服务费）</span>';
+        }
+        if (valueSpan) valueSpan.textContent = fmt(settleState.totalReceived);
+      }
+      const prepaidRow = payTotals.querySelector('#outPrepaidRow');
+      if (prepaidRow) prepaidRow.style.display = 'none';
+      const realPrepaidRow = payTotals.querySelector('#outRealPrepaidRow');
+      if (realPrepaidRow) realPrepaidRow.style.display = 'none';
+      const finalRow = payTotals.querySelector('#outFinalRow');
+      if (finalRow) finalRow.style.display = 'none';
+    }
+
+    /* 7. 等图片加载完 */
+    await waitForImagesIn(receiptEl, 1800);
+    await new Promise(r => requestAnimationFrame(r));
+    await new Promise(r => setTimeout(r, 100));
+
+    /* 8. 截图（截图前隐藏所有编辑手柄，防止被截进去） */
+    const handleState = hideAllReceiptHandles();
+    const canvas = await html2canvas(receiptEl, {
+      scale: 2,
+      backgroundColor: '#ffffff',
+      useCORS: true,
+    });
+    restoreAllReceiptHandles(handleState);
+    const dataUrl = canvas.toDataURL('image/png');
+
+    /* 9. 恢复付款区 */
+    if (payTotals && originalPayHTML) {
+      payTotals.innerHTML = originalPayHTML;
+    }
+
+    /* 10. 存图 */
+    const blob = dataURLToBlob(dataUrl);
+    if (!blob) return '';
+    const ref = await saveImageBlob(blob, 'final_receipt_' + (todo.orderNo || '') + '.png');
+    return ref || '';
+  } catch (e) {
+    console.warn('generateFinalReceipt 失败', e);
+    return '';
+  } finally {
+    /* 11. 把真实的小票 DOM 移回原位 */
+    try {
+      if (originalNextSibling && originalNextSibling.parentNode === originalParent) {
+        originalParent.insertBefore(receiptEl, originalNextSibling);
+      } else {
+        originalParent.appendChild(receiptEl);
+      }
+    } catch (e) {}
+
+    /* 12. 移除屏幕外容器 */
+    if (offscreen && offscreen.parentNode) offscreen.parentNode.removeChild(offscreen);
+
+    /* 13. 恢复用户小票页数据 */
+    try {
+      restoreReceiptFormSnapshot(backupSnap);
+      window.__editingTodoId = backupEditingId;
+      window.__currentOrderNo = backupOrderNo;
+      try { generate(); } catch (e) {}
+    } catch (e) {}
+
+    window.__receiptGenerated  = backupGenerated;
+    window.__receiptImported   = backupImported;
+    window.__receiptWarnIgnore = backupWarnIgnore;
+  }
+}
+
+/* 结单小票弹窗（只有保存按钮） */
+function openFinalReceiptModal(imageRef) {
+  /* ★ 同步：先把弹窗 D 显示出来（内容位先放个 loading 占位） */
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay">
+      <div class="modal final-receipt-modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>结单小票</h3>
+        </div>
+        <div class="modal-body" style="text-align:center;">
+          <div class="settle-inline-loading" id="finalReceiptImgPlaceholder">
+            <div class="settle-loading-spinner"></div>
+            <div class="settle-loading-text">正在加载小票...</div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  /* 异步：图片准备好后，原地替换占位 */
+  resolveImageSrc(imageRef).then(url => {
+    if (!url) {
+      closeModal();
+      showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
+      return;
+    }
+    const body = document.querySelector('.final-receipt-modal .modal-body');
+    if (!body) return;
+    body.innerHTML = `
+      <img src="${escapeAttr(url)}" alt="结单小票"
+           style="max-width:100%;max-height:55vh;border:1px solid var(--line-soft);display:block;margin:0 auto;" />
+      <div class="actions" style="justify-content:center;margin-top:18px;">
+        <button class="action-btn" onclick="saveFinalReceiptAndClose('${escapeAttr(imageRef)}')">保存到相册</button>
+      </div>
+    `;
+  }).catch(() => {
+    closeModal();
+    showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
+  });
+}
+
+async function saveFinalReceiptAndClose(imageRef) {
+  try {
+    const url = await resolveImageSrc(imageRef);
+    if (url) {
+      await saveOrShareImage(url, '结单小票.png');
+    } else {
+      showSimpleAlert('提示', '图片已丢失，无法保存。');
+    }
+  } catch (e) {
+    console.warn('保存失败', e);
+    showSimpleAlert('提示', '保存失败：' + (e && e.message ? e.message : '未知错误'));
+  }
+  closeModal();
+
+  /* ★ 手动切页面，不走 showPage，避免触发"小票未导入"警告 */
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = $('pageCompleted');
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    if (btn.dataset.page === 'pageTodo') btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (typeof renderCompletedList === 'function') renderCompletedList();
+}
 
 /* ═══════════════════════════════════════════════════════
    [M-03] 废稿流程
@@ -7868,7 +9979,7 @@ function renderCompletedList() {
     return `
     <div class="completed-card" onclick="openCompletedDetail('${escapeAttr(c.id)}')">
       <div class="completed-card-body">
-        <div class="completed-card-title">${escapeHtml(c.clientName || '未命名')}</div>
+        <div class="completed-card-title">${escapeHtml(c.clientName || '未命名')}${c.orderNo ? `<span class="order-no-inline"> · ${escapeHtml(c.orderNo)}</span>` : ''}</div>
         ${renderTodoCardTags(c.tags)}
         <div class="completed-card-meta">
           <span class="meta-item">ID：<strong>${escapeHtml(c.clientId || '—')}</strong></span>
@@ -7944,7 +10055,7 @@ function renderCancelledList() {
     <div class="cancelled-card${manageCls}" onclick="onCancelledCardClick('${id}')">
       ${circleHtml}
       <div class="cancelled-card-body">
-        <div class="cancelled-card-title">${escapeHtml(c.clientName || '未命名')}</div>
+        <div class="cancelled-card-title">${escapeHtml(c.clientName || '未命名')}${c.orderNo ? `<span class="order-no-inline"> · ${escapeHtml(c.orderNo)}</span>` : ''}</div>
         ${renderTodoCardTags(c.tags)}
         <div class="cancelled-card-meta">
           <span class="meta-item">ID：<strong>${escapeHtml(c.clientId || '—')}</strong></span>
@@ -8019,7 +10130,7 @@ function renderDiscardedList() {
     <div class="discarded-card${manageCls}" onclick="onDiscardedCardClick('${id}')">
       ${circleHtml}
       <div class="discarded-card-body">
-        <div class="discarded-card-title">${escapeHtml(c.clientName || '未命名')}</div>
+        <div class="discarded-card-title">${escapeHtml(c.clientName || '未命名')}${c.orderNo ? `<span class="order-no-inline"> · ${escapeHtml(c.orderNo)}</span>` : ''}</div>
         ${renderTodoCardTags(c.tags)}
         <div class="discarded-card-meta">
           <span class="meta-item">ID：<strong>${escapeHtml(c.clientId || '—')}</strong></span>
@@ -8054,6 +10165,7 @@ function openCompletedDetail(id) {
         </div>
         <div class="modal-body">
           <div class="completed-detail-list">
+            ${c.orderNo ? `<div class="completed-detail-row"><span class="k">订单编号</span><span class="v">${escapeHtml(c.orderNo)}</span></div>` : ''}
             <div class="completed-detail-row">
               <span class="k">单主ID</span>
               <span class="v">${escapeHtml(c.clientId || '—')}</span>
@@ -8135,6 +10247,7 @@ function openCancelledDetail(id) {
         </div>
         <div class="modal-body">
           <div class="completed-detail-list">
+            ${c.orderNo ? `<div class="completed-detail-row"><span class="k">订单编号</span><span class="v">${escapeHtml(c.orderNo)}</span></div>` : ''}
             <div class="completed-detail-row">
               <span class="k">单主ID</span>
               <span class="v">${escapeHtml(c.clientId || '—')}</span>
@@ -8166,12 +10279,6 @@ function openCancelledDetail(id) {
             </div>
           </div>
 
-          <div id="cancelledDetailPhotoWrap" style="margin-top:14px;text-align:center;display:none;">
-            <img id="cancelledDetailPhoto" alt="小票"
-                 style="max-width:100%; max-height:360px; object-fit:contain;
-                        border:1px solid var(--line-soft); cursor:zoom-in;" />
-          </div>
-
           <div class="actions" style="justify-content:flex-end;margin-top:18px;">
             <button class="action-btn" onclick="closeModal()">关闭</button>
           </div>
@@ -8179,17 +10286,30 @@ function openCancelledDetail(id) {
       </div>
     </div>`;
 
-  if (c.receiptImage) {
-    resolveImageSrc(c.receiptImage).then(url => {
-      if (!url) return;
-      const wrap = $('cancelledDetailPhotoWrap');
-      const img = $('cancelledDetailPhoto');
-      if (!wrap || !img) return;
-      img.src = url;
-      img.onclick = () => openImageFullscreen(url);
-      wrap.style.display = 'block';
-    }).catch(() => {});
-  }
+  /* 顺手清理老撤单记录里的小票图片（省内存） */
+  cleanupRecordReceiptImage('cancelled', id);
+}
+
+async function cleanupRecordReceiptImage(type, id) {
+  try {
+    const isCancelled = (type === 'cancelled');
+    const list = isCancelled ? getCancelled() : getDiscarded();
+    const idx = list.findIndex(x => x.id === id);
+    if (idx < 0) return;
+    const c = list[idx];
+    if (!c.receiptImage && !c.receiptSnapshot) return;
+
+    const oldRef  = c.receiptImage || '';
+    const oldPrev = (c.receiptSnapshot && c.receiptSnapshot.previewImage)
+      ? c.receiptSnapshot.previewImage : '';
+
+    c.receiptImage = '';
+    c.receiptSnapshot = null;
+    if (isCancelled) setCancelled(list); else setDiscarded(list);
+
+    if (oldRef)  { try { await deleteImageRef(oldRef); }  catch (e) {} }
+    if (oldPrev) { try { await deleteImageRef(oldPrev); } catch (e) {} }
+  } catch (e) {}
 }
 
 function openDiscardedDetail(id) {
@@ -8212,6 +10332,7 @@ function openDiscardedDetail(id) {
         </div>
         <div class="modal-body">
           <div class="completed-detail-list">
+            ${c.orderNo ? `<div class="completed-detail-row"><span class="k">订单编号</span><span class="v">${escapeHtml(c.orderNo)}</span></div>` : ''}
             <div class="completed-detail-row">
               <span class="k">单主ID</span>
               <span class="v">${escapeHtml(c.clientId || '—')}</span>
@@ -8243,12 +10364,6 @@ function openDiscardedDetail(id) {
             </div>
           </div>
 
-          <div id="discardedDetailPhotoWrap" style="margin-top:14px;text-align:center;display:none;">
-            <img id="discardedDetailPhoto" alt="小票"
-                 style="max-width:100%; max-height:360px; object-fit:contain;
-                        border:1px solid var(--line-soft); cursor:zoom-in;" />
-          </div>
-
           <div class="actions" style="justify-content:flex-end;margin-top:18px;">
             <button class="action-btn" onclick="closeModal()">关闭</button>
           </div>
@@ -8256,17 +10371,8 @@ function openDiscardedDetail(id) {
       </div>
     </div>`;
 
-  if (c.receiptImage) {
-    resolveImageSrc(c.receiptImage).then(url => {
-      if (!url) return;
-      const wrap = $('discardedDetailPhotoWrap');
-      const img = $('discardedDetailPhoto');
-      if (!wrap || !img) return;
-      img.src = url;
-      img.onclick = () => openImageFullscreen(url);
-      wrap.style.display = 'block';
-    }).catch(() => {});
-  }
+  /* 顺手清理老废稿记录里的小票图片（省内存） */
+  cleanupRecordReceiptImage('discarded', id);
 }
 
 /* 删除结单记录 */
@@ -9108,6 +11214,25 @@ function confirmRecord() {
    从一笔流水推断"这笔钱对应的订单状态"（用于明细里显示）。
    ═══════════════════════════════════════════════════════ */
 
+function getOrderNoFromFlow(flow) {
+  if (!flow) return '';
+  if (flow.todoId) {
+    const t = getTodos().find(x => x.id === flow.todoId);
+    if (t && t.orderNo) return t.orderNo;
+    const comp = getCompleted().find(x => x.todoId === flow.todoId);
+    if (comp && comp.orderNo) return comp.orderNo;
+    const canc = getCancelled().find(x => x.todoId === flow.todoId);
+    if (canc && canc.orderNo) return canc.orderNo;
+    const disc = getDiscarded().find(x => x.todoId === flow.todoId);
+    if (disc && disc.orderNo) return disc.orderNo;
+  }
+  if (flow.completedId) {
+    const comp = getCompleted().find(x => x.id === flow.completedId);
+    if (comp && comp.orderNo) return comp.orderNo;
+  }
+  return '';
+}
+
 function getFlowOrderStatus(flow) {
   if (!flow) return '—';
 
@@ -9182,9 +11307,11 @@ function openStatsDetail(type) {
     rowsHtml = items.map(f => {
       const amt = Number(f.amount) || 0;
       const status = getFlowOrderStatus(f);
+      const no = getOrderNoFromFlow(f);
+      const noText = no ? (' · ' + escapeHtml(no)) : '';
       return '<div class="info-row">'
         + '<span>' + escapeHtml(f.note || '—')
-        + ' <span style="color:var(--ink-soft);font-size:11px;">（' + escapeHtml(status) + ' · ' + escapeHtml(f.date) + '）</span></span>'
+        + ' <span style="color:var(--ink-soft);font-size:11px;">（' + escapeHtml(status) + ' · ' + escapeHtml(f.date) + noText + '）</span></span>'
         + '<span>' + fmt(amt) + '</span>'
         + '</div>';
     }).join('');
@@ -9239,9 +11366,11 @@ function openStatsDetail(type) {
 
     rowsHtml = items.map(f => {
       const status = getFlowOrderStatus(f);
+      const no = getOrderNoFromFlow(f);
+      const noText = no ? (' · ' + escapeHtml(no)) : '';
       return '<div class="info-row">'
         + '<span>' + escapeHtml(f.note || '退款')
-        + ' <span style="color:var(--ink-soft);font-size:11px;">（' + escapeHtml(status) + ' · ' + escapeHtml(f.date) + '）</span></span>'
+        + ' <span style="color:var(--ink-soft);font-size:11px;">（' + escapeHtml(status) + ' · ' + escapeHtml(f.date) + noText + '）</span></span>'
         + '<span>' + fmt(f.amount) + '</span>'
         + '</div>';
     }).join('');
@@ -10830,6 +12959,364 @@ var __ticketFolderItems = [];
 var __ticketFolderRendered = 0;
 var TICKET_FOLDER_PAGE_SIZE = 30;
 
+/* ═══════════════════════════════════════════════════════
+   [TF-02] 票夹 · 筛选 + 管理 + 删除
+   ═══════════════════════════════════════════════════════ */
+
+var __ticketFilter = { range: 'all', customStart: '', customEnd: '', tagName: '', clientId: '', ip: '', attribute: '' };
+var __ticketManage = { active: false, selected: {} };
+
+/* 判断某张小票是否在筛选范围内 */
+function ticketMatchesFilter(it) {
+  if (!it) return false;
+
+  /* 时间范围 */
+  const date = it.date || '';
+  if (__ticketFilter.range === 'month') {
+    const now = new Date();
+    const start = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-01';
+    const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const end = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(lastDay).padStart(2, '0');
+    if (!date || date < start || date > end) return false;
+  } else if (__ticketFilter.range === 'year') {
+    const y = new Date().getFullYear();
+    const start = y + '-01-01';
+    const end = y + '-12-31';
+    if (!date || date < start || date > end) return false;
+  } else if (__ticketFilter.range === 'custom') {
+    if (!date) return false;
+    if (__ticketFilter.customStart && date < __ticketFilter.customStart) return false;
+    if (__ticketFilter.customEnd && date > __ticketFilter.customEnd) return false;
+  }
+
+  /* 单主 ID */
+  if (__ticketFilter.clientId) {
+    const cid = String(it.clientId || '').toLowerCase();
+    if (cid.indexOf(__ticketFilter.clientId.toLowerCase()) === -1) return false;
+  }
+
+  /* 标签 */
+  if (__ticketFilter.tagName) {
+    const tags = it.tags || [];
+    if (!tags.some(t => t.name === __ticketFilter.tagName)) return false;
+  }
+
+  /* IP */
+  if (__ticketFilter.ip) {
+    if (String(it.ip || '').trim() !== __ticketFilter.ip) return false;
+  }
+
+  /* 属性 */
+  if (__ticketFilter.attribute) {
+    if (String(it.attribute || '').trim() !== __ticketFilter.attribute) return false;
+  }
+
+  return true;
+}
+
+/* 打开筛选弹窗 */
+function openTicketFilterModal() {
+  const lib = getTagLibrary();
+  const cur = __ticketFilter;
+
+  const rangeBtns = ['all', 'month', 'year', 'custom'].map(k => {
+    const label = { all: '全部', month: '本月', year: '本年', custom: '自定义' }[k];
+    return '<button type="button" class="ofm-range-btn' + (cur.range === k ? ' active' : '') +
+           '" onclick="setTicketFilterRange(\'' + k + '\')">' + label + '</button>';
+  }).join('');
+
+  const tagListHtml = lib.length
+    ? lib.map(t => {
+        const sel = cur.tagName === t.name;
+        const color = TAG_COLORS.indexOf(t.color) > -1 ? t.color : 'red';
+        return '<span class="tag-chip tag-color-' + color + (sel ? ' is-selected' : '') +
+               '" onclick="setTicketFilterTag(\'' + escapeAttr(t.name) + '\')">' +
+               escapeHtml(t.name) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史标签</span>';
+
+  const ipList = collectHistoryFieldValues('ip');
+  const ipListHtml = ipList.length
+    ? ipList.map(v => {
+        const sel = cur.ip === v;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleTicketFilterIP(\'' + escapeAttr(v) + '\')">' +
+               escapeHtml(v) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史 IP</span>';
+
+  const attrList = collectHistoryFieldValues('attribute');
+  const attrListHtml = attrList.length
+    ? attrList.map(v => {
+        const sel = cur.attribute === v;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleTicketFilterAttribute(\'' + escapeAttr(v) + '\')">' +
+               escapeHtml(v) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史属性</span>';
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeTicketFilterModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>筛选小票</h3>
+          <button class="icon-btn" onclick="closeTicketFilterModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="ofm-section">
+            <label class="ofm-section-label">时间范围</label>
+            <div class="ofm-range-btns">${rangeBtns}</div>
+            <div class="ofm-custom-range" id="ticketCustomRange" style="${cur.range === 'custom' ? '' : 'display:none;'}">
+              <input type="date" id="ticketStartDate" value="${escapeAttr(cur.customStart || '')}" />
+              <span style="font-size:12px;color:var(--ink-soft);">至</span>
+              <input type="date" id="ticketEndDate" value="${escapeAttr(cur.customEnd || '')}" />
+            </div>
+          </div>
+
+          <div class="ofm-section">
+            <label class="ofm-section-label">单主 ID</label>
+            <input type="text" id="ticketClientFilter" value="${escapeAttr(cur.clientId || '')}" placeholder="输入单主 ID 关键字（可留空）" maxlength="60" />
+          </div>
+
+          <div class="ofm-section">
+            <label class="ofm-section-label">标签（单选，可留空）</label>
+            <div class="ofm-tag-list" id="ticketTagFilterList">${tagListHtml}</div>
+          </div>
+
+          <div class="ofm-section">
+            <label class="ofm-section-label">IP（单选）</label>
+            <div class="ofm-tag-list" id="ticketIPFilterList">${ipListHtml}</div>
+          </div>
+
+          <div class="ofm-section">
+            <label class="ofm-section-label">属性（单选）</label>
+            <div class="ofm-tag-list" id="ticketAttrFilterList">${attrListHtml}</div>
+          </div>
+
+          <div class="actions" style="justify-content:space-between;margin-top:22px;">
+            <button type="button" class="action-btn ghost" onclick="clearTicketFilter()">清空条件</button>
+            <div style="display:flex;gap:10px;">
+              <button type="button" class="action-btn ghost" onclick="closeTicketFilterModal()">取消</button>
+              <button type="button" class="action-btn" onclick="applyTicketFilter()">确定</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function setTicketFilterRange(k) {
+  __ticketFilter.range = k;
+  document.querySelectorAll('#ticketCustomRange').forEach(el => {});
+  document.querySelectorAll('.ofm-range-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.textContent.trim() ===
+      ({ all: '全部', month: '本月', year: '本年', custom: '自定义' }[k]));
+  });
+  const c = $('ticketCustomRange');
+  if (c) c.style.display = (k === 'custom') ? '' : 'none';
+}
+
+function setTicketFilterTag(name) {
+  __ticketFilter.tagName = (__ticketFilter.tagName === name) ? '' : name;
+  const lib = getTagLibrary();
+  const html = lib.map(t => {
+    const sel = __ticketFilter.tagName === t.name;
+    const color = TAG_COLORS.indexOf(t.color) > -1 ? t.color : 'red';
+    return '<span class="tag-chip tag-color-' + color + (sel ? ' is-selected' : '') +
+           '" onclick="setTicketFilterTag(\'' + escapeAttr(t.name) + '\')">' +
+           escapeHtml(t.name) + '</span>';
+  }).join('');
+  const box = $('ticketTagFilterList');
+  if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史标签</span>';
+}
+
+function toggleTicketFilterIP(name) {
+  __ticketFilter.ip = (__ticketFilter.ip === name) ? '' : name;
+  const list = collectHistoryFieldValues('ip');
+  const html = list.map(v => {
+    const sel = __ticketFilter.ip === v;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleTicketFilterIP(\'' + escapeAttr(v) + '\')">' +
+           escapeHtml(v) + '</span>';
+  }).join('');
+  const box = $('ticketIPFilterList');
+  if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史 IP</span>';
+}
+
+function toggleTicketFilterAttribute(name) {
+  __ticketFilter.attribute = (__ticketFilter.attribute === name) ? '' : name;
+  const list = collectHistoryFieldValues('attribute');
+  const html = list.map(v => {
+    const sel = __ticketFilter.attribute === v;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleTicketFilterAttribute(\'' + escapeAttr(v) + '\')">' +
+           escapeHtml(v) + '</span>';
+  }).join('');
+  const box = $('ticketAttrFilterList');
+  if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史属性</span>';
+}
+
+function clearTicketFilter() {
+  __ticketFilter = { range: 'all', customStart: '', customEnd: '', tagName: '', clientId: '', ip: '', attribute: '' };
+  openTicketFilterModal();
+}
+
+function closeTicketFilterModal() { closeModal(); }
+
+function applyTicketFilter() {
+  const range = __ticketFilter.range;
+  if (range === 'custom') {
+    __ticketFilter.customStart = $('ticketStartDate') ? $('ticketStartDate').value : '';
+    __ticketFilter.customEnd   = $('ticketEndDate')   ? $('ticketEndDate').value   : '';
+    if (!__ticketFilter.customStart || !__ticketFilter.customEnd) {
+      alert('请选择完整的自定义日期范围'); return;
+    }
+    if (__ticketFilter.customStart > __ticketFilter.customEnd) {
+      alert('开始日期不能晚于结束日期'); return;
+    }
+  }
+  __ticketFilter.clientId = $('ticketClientFilter') ? String($('ticketClientFilter').value || '').trim() : '';
+  /* ip 和 attribute 已在 toggle 时写入 __ticketFilter，无需再读 */
+  closeTicketFilterModal();
+  renderTicketFolder();
+}
+
+/* ---------- 管理模式 ---------- */
+function toggleTicketManageMode() {
+  __ticketManage.active = !__ticketManage.active;
+  __ticketManage.selected = {};
+
+  const btn = $('ticketManageBtn');
+  if (btn) btn.textContent = __ticketManage.active ? '退出' : '管理';
+
+  const bar = $('ticketManageBar');
+  if (bar) bar.style.display = __ticketManage.active ? 'flex' : 'none';
+
+  updateTicketManageBar();
+  renderTicketFolder();
+}
+
+function exitTicketManageMode() {
+  __ticketManage.active = false;
+  __ticketManage.selected = {};
+
+  const btn = $('ticketManageBtn');
+  if (btn) btn.textContent = '管理';
+
+  const bar = $('ticketManageBar');
+  if (bar) bar.style.display = 'none';
+
+  renderTicketFolder();
+}
+
+function toggleTicketSelect(key) {
+  if (!__ticketManage.active) return;
+  if (__ticketManage.selected[key]) delete __ticketManage.selected[key];
+  else __ticketManage.selected[key] = true;
+  renderTicketFolder();
+}
+
+function toggleAllTicketSelect() {
+  if (!__ticketManage.active) return;
+  const allKeys = __ticketFolderItems.map(it => it.key);
+  const allSelected = allKeys.length > 0 && allKeys.every(k => __ticketManage.selected[k]);
+  if (allSelected) allKeys.forEach(k => { delete __ticketManage.selected[k]; });
+  else             allKeys.forEach(k => { __ticketManage.selected[k] = true; });
+  renderTicketFolder();
+}
+
+function updateTicketManageBar() {
+  const selCount = Object.keys(__ticketManage.selected).length;
+  const countEl = $('ticketSelectedCount');
+  if (countEl) countEl.textContent = '已选择 ' + selCount + ' 张';
+
+  const delBtn = $('ticketBatchDeleteBtn');
+  if (delBtn) delBtn.disabled = selCount === 0;
+
+  const selAllBtn = $('ticketSelectAllBtn');
+  if (selAllBtn) {
+    const allKeys = __ticketFolderItems.map(it => it.key);
+    if (!allKeys.length) selAllBtn.textContent = '全选';
+    else {
+      const allSel = allKeys.every(k => __ticketManage.selected[k]);
+      selAllBtn.textContent = allSel ? '取消全选' : '全选';
+    }
+  }
+}
+
+function confirmTicketBatchDelete() {
+  const keys = Object.keys(__ticketManage.selected);
+  if (!keys.length) { showSimpleAlert('提示', '请先勾选要删除的小票。'); return; }
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>删除小票图片</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;">确定删除选中的 <strong>${keys.length}</strong> 张小票图片吗？</p>
+          <p style="font-size:12px;color:var(--ink-soft);margin:0 0 10px;line-height:1.7;">
+            只删除小票图片。<br>
+            <strong>订单、结单记录、流水、统计数字全部不变。</strong>
+          </p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="doTicketBatchDelete()">确定删除</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doTicketBatchDelete() {
+  const keys = Object.keys(__ticketManage.selected);
+  if (!keys.length) { closeModal(); return; }
+
+  const todos = getTodos();
+  const completed = getCompleted();
+  let deletedTodos = 0, deletedCompleted = 0;
+  const refsToDelete = [];
+
+  for (const key of keys) {
+    const idx = key.indexOf(':');
+    const type = key.slice(0, idx);
+    const id = key.slice(idx + 1);
+
+    if (type === 'todo') {
+      const t = todos.find(x => x.id === id);
+      if (t && t.receiptImage) {
+        refsToDelete.push(t.receiptImage);
+        t.receiptImage = '';
+        deletedTodos++;
+      }
+    } else if (type === 'completed') {
+      const c = completed.find(x => x.id === id);
+      if (c && c.receiptImage) {
+        refsToDelete.push(c.receiptImage);
+        c.receiptImage = '';
+        deletedCompleted++;
+      }
+    }
+  }
+
+  setTodos(todos);
+  setCompleted(completed);
+
+  /* 从 IDB 删图片 */
+  for (const ref of refsToDelete) {
+    try { await deleteImageRef(ref); } catch (e) {}
+  }
+
+  __ticketManage.selected = {};
+  closeModal();
+  showSimpleAlert('已删除', '已删除 ' + (deletedTodos + deletedCompleted) + ' 张小票图片。');
+  renderTicketFolder();
+  updateTicketManageBar();
+}
+
+/* 老的切换排序函数保留，放在下面 */
 function toggleTicketFolderSort() {
   __ticketFolderSort = (__ticketFolderSort === 'desc') ? 'asc' : 'desc';
   const btn = $('ticketFolderSortBtn');
@@ -10848,12 +13335,17 @@ function collectTicketItems() {
   /* 已结单的小票 */
   getCompleted().forEach(c => {
     if (!c.receiptImage) return;
+    const snap = c.receiptSnapshot || {};
     items.push({
+      key: 'completed:' + c.id,
       ref: c.receiptImage,
       clientId: c.clientId || '',
       clientName: c.clientName || '未命名',
       date: c.completedDate || c.orderDate || '',
       createdAt: c.createdAt || 0,
+      tags: c.tags || [],
+      ip: String(snap.ip || '').trim(),
+      attribute: String(snap.attribute || '').trim(),
     });
   });
 
@@ -10861,12 +13353,17 @@ function collectTicketItems() {
   getTodos().forEach(t => {
     if (!t.receiptImage) return;
     if (t.status !== 'pending') return;
+    const snap = t.receiptSnapshot || {};
     items.push({
+      key: 'todo:' + t.id,
       ref: t.receiptImage,
       clientId: t.clientId || '',
       clientName: t.clientName || '未命名',
       date: t.deadline || t.orderDate || '',
       createdAt: t.createdAt || 0,
+      tags: t.tags || [],
+      ip: String(snap.ip || '').trim(),
+      attribute: String(snap.attribute || '').trim(),
     });
   });
 
@@ -10881,46 +13378,51 @@ function renderTicketFolder() {
 
   if (!grid) return;
 
-  const all = collectTicketItems();
+  let all = collectTicketItems();
 
-  /* 搜索 */
+  /* 搜索框 */
   const q = ($('ticketFolderSearch') ? $('ticketFolderSearch').value : '').trim().toLowerCase();
-  let items = all;
   if (q) {
-    items = items.filter(it => {
+    all = all.filter(it => {
       const hay = (it.clientId + ' ' + it.clientName + ' ' + (it.date || '')).toLowerCase();
       return hay.indexOf(q) > -1;
     });
+  }
+
+  /* 筛选 */
+  const hasFilter = __ticketFilter.range !== 'all'
+                 || __ticketFilter.clientId
+                 || __ticketFilter.tagName
+                 || __ticketFilter.ip
+                 || __ticketFilter.attribute;
+  let items = all;
+  if (hasFilter) {
+    items = items.filter(ticketMatchesFilter);
   }
 
   /* 排序 */
   items.sort((a, b) => {
     const ca = a.createdAt || 0;
     const cb = b.createdAt || 0;
-    if (ca !== cb) {
-      return __ticketFolderSort === 'asc' ? ca - cb : cb - ca;
-    }
+    if (ca !== cb) return __ticketFolderSort === 'asc' ? ca - cb : cb - ca;
     const da = a.date || '';
     const db = b.date || '';
-    if (da !== db) {
-      return __ticketFolderSort === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
-    }
+    if (da !== db) return __ticketFolderSort === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
     return 0;
   });
 
   __ticketFolderItems = items;
   __ticketFolderRendered = 0;
 
-  if (countEl) {
-    countEl.textContent = items.length > 0 ? ('（' + items.length + ' 张）') : '';
-  }
+  if (countEl) countEl.textContent = items.length > 0 ? ('（' + items.length + ' 张）') : '';
 
   /* 空态判断 */
-  if (all.length === 0) {
+  if (all.length === 0 && !hasFilter) {
     grid.innerHTML = '';
     if (empty) empty.style.display = '';
     if (noMatch) noMatch.style.display = 'none';
     updateTicketFolderMoreBtn();
+    updateTicketManageBar();
     return;
   }
 
@@ -10929,6 +13431,7 @@ function renderTicketFolder() {
     if (empty) empty.style.display = 'none';
     if (noMatch) noMatch.style.display = '';
     updateTicketFolderMoreBtn();
+    updateTicketManageBar();
     return;
   }
 
@@ -10937,6 +13440,7 @@ function renderTicketFolder() {
 
   grid.innerHTML = '';
   appendTicketItemsBatch();
+  updateTicketManageBar();
 }
 
 /* 分页加载：每次追加一批 */
@@ -10957,8 +13461,20 @@ function appendTicketItemsBatch() {
   wrap.style.display = 'contents';
   wrap.innerHTML = slice.map((it, i) => {
     const idx = start + i;
+    const key = it.key || '';
+    const isSelected = __ticketManage.active && !!__ticketManage.selected[key];
+    const manageCls = isSelected ? ' is-selected' : '';
+    const circleHtml = __ticketManage.active
+      ? `<div class="ticket-select-circle" onclick="event.stopPropagation();toggleTicketSelect('${escapeAttr(key)}')" title="选择">
+           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+             <circle cx="12" cy="12" r="10"/>
+             ${isSelected ? '<polyline points="8 12 11 15 16 9"/>' : ''}
+           </svg>
+         </div>`
+      : '';
     return `
-      <div class="ticket-folder-thumb" id="tfThumb_${idx}">
+      <div class="ticket-folder-thumb${manageCls}" id="tfThumb_${idx}" data-key="${escapeAttr(key)}">
+        ${circleHtml}
         <img id="tfImg_${idx}" alt="${escapeAttr(it.clientName)}" loading="lazy" />
         <div class="ticket-folder-thumb-meta">
           <span class="tf-meta-name">${escapeHtml(it.clientName || it.clientId || '—')}</span>
@@ -11002,7 +13518,13 @@ async function fillTicketThumb(idx, item) {
       return;
     }
     img.src = url;
-    thumb.onclick = () => openImageFullscreen(url);
+    thumb.onclick = () => {
+      if (__ticketManage.active) {
+        toggleTicketSelect(item.key);
+      } else {
+        openImageFullscreen(url);
+      }
+    };
   } catch (e) {
     thumb.style.background = '#eef1f4';
   }
@@ -11558,6 +14080,15 @@ function resetAll() {
 
   if ($('client'))       $('client').value       = INITIAL_VALUES.client;
   if ($('project'))      $('project').value      = INITIAL_VALUES.project;
+
+  /* 画师/美工恢复成设置里的默认值 */
+  if ($('artistIdentity')) {
+    renderArtistIdentitySelect();
+    $('artistIdentity').value = getDefaultIdentity();
+  }
+  if ($('artistId')) {
+    $('artistId').value = getSavedArtistName();
+  }
   if ($('attribute'))    $('attribute').value    = INITIAL_VALUES.attribute;
   if ($('character'))    $('character').value    = INITIAL_VALUES.character;
   if ($('orderDate'))    $('orderDate').value    = today;
@@ -11592,6 +14123,17 @@ function resetAll() {
   if ($('discountsContainer')) $('discountsContainer').innerHTML = '';
   if ($('giftsContainer'))     $('giftsContainer').innerHTML = '';
 
+  /* 重置总服务费 */
+  if (typeof setOrderServiceFeeConfig === 'function') setOrderServiceFeeConfig(null);
+  if (typeof updateOrderServiceBtnState === 'function') updateOrderServiceBtnState();
+
+  /* 重置预付配置 */
+  if (typeof setPrepaidConfig === 'function') {
+    setPrepaidConfig({ enabled: true, customAmount: null });
+    window.__prepaidLastSystemValue = null;
+  }
+  if (typeof updatePrepaidBtnState === 'function') updatePrepaidBtnState();
+
   if (typeof clearPreview === 'function') clearPreview();
   clearAllFieldErrors();
 
@@ -11607,6 +14149,8 @@ function resetAll() {
   window.__receiptGenerated = false;
   window.__receiptImported  = false;
   window.__receiptWarnIgnore = false;
+  window.__currentOrderNo = '';
+  window.__editingTodoId = null;
 }
 
 
@@ -11629,6 +14173,22 @@ function renderIdentitySelect() {
   else if (list.length) sel.value = list[0];
 
   if ($('identity')) $('identity').value = sel.value;
+}
+
+/* 渲染小票页的"画师 / 美工"下拉框 */
+function renderArtistIdentitySelect() {
+  const sel = $('artistIdentity');
+  if (!sel) return;
+  const list = getIdentities();
+  const def = getDefaultIdentity();
+  const cur = sel.value || def;
+
+  sel.innerHTML = list.map(n =>
+    `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`
+  ).join('');
+
+  if (list.indexOf(cur) > -1) sel.value = cur;
+  else if (list.length) sel.value = list[0];
 }
 
 function renderIdentityList() {
@@ -12106,7 +14666,8 @@ function addGroup(presetTitle) {
     <div class="group-items-label">稿件（可填写或添加预设）</div>
     <div class="group-items"></div>
     <button class="add-item-btn" onclick="addItemToGroup(this)">+ 添加稿件</button>
-    <div class="group-subtotal">组小计：<span class="g-subtotal-val">¥0.00</span></div>
+    <button class="add-item-btn group-service-btn" onclick="onAddGroupServiceClick(this)">组服务费</button>
+    <div class="group-subtotal">组合计：<span class="g-subtotal-val">¥0.00</span></div>
   `;
   container.appendChild(div);
   addItemToGroup(div.querySelector('.group-items'), null);
@@ -12117,7 +14678,7 @@ function addGroup(presetTitle) {
 function resolveGroupLabel(block, fallbackIdx) {
   const raw = block.querySelector('.group-title').value.trim();
   const num = block.dataset.groupNum || fallbackIdx;
-  return raw ? ('稿件组' + num + '：' + raw) : ('稿件组' + num);
+  return raw ? raw : ('稿件组' + num);
 }
 
 function removeGroup(btn) {
@@ -14698,47 +17259,48 @@ function discountPresetPicked(i) {
 
    /* ══════════ 通用图片保存（兼容 iOS） ══════════ */
 async function saveOrShareImage(dataUrl, filename) {
-  /* 1. 优先用 Web Share API（iOS 14+ 支持分享文件） */
-  if (navigator.share && navigator.canShare) {
-    try {
+  try {
+    /* 转成 Blob，用 Blob URL 下载（比 dataURL 更稳，避免超长 URL 被拒） */
+    let blob = null;
+    if (String(dataUrl).indexOf('blob:') === 0) {
       const res = await fetch(dataUrl);
-      const blob = await res.blob();
-      const file = new File([blob], filename, { type: 'image/png' });
-      if (navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file] });
-        return true;
-      }
-    } catch (e) {
-      if (e && e.name === 'AbortError') return true;   /* 用户取消，不算失败 */
-      /* 其它错误 → 继续降级 */
+      blob = await res.blob();
+    } else {
+      blob = dataURLToBlob(dataUrl);
     }
-  }
+    if (!blob) {
+      alert('图片生成失败，无法保存。');
+      return false;
+    }
 
-  /* 2. 非 iOS：用 a 标签下载 */
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
-              || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  if (!isIOS) {
+    /* 再包一层 File，确保是 .png */
+    let downloadUrl;
+    try {
+      downloadUrl = URL.createObjectURL(blob);
+    } catch (e) {
+      alert('无法创建下载链接：' + (e.message || '未知错误'));
+      return false;
+    }
+
     const link = document.createElement('a');
-    link.download = filename;
-    link.href = dataUrl;
+    link.href = downloadUrl;
+    link.download = filename || '图片.png';
+    link.rel = 'noopener';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    return true;
-  }
 
-  /* 3. iOS 兜底：新窗口打开图片，让用户长按保存 */
-  const w = window.open('', '_blank');
-  if (w) {
-    w.document.write('<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>保存图片</title></head><body style="margin:0;background:#f4f5f7;text-align:center;">');
-    w.document.write('<p style="font-family:-apple-system,sans-serif;font-size:15px;color:#333;padding:14px 20px;margin:0;background:#fff;border-bottom:1px solid #e0e0e0;">长按下方图片 → 选择「存储到照片」</p>');
-    w.document.write('<img src="' + dataUrl + '" style="max-width:100%;display:block;margin:12px auto;">');
-    w.document.write('</body></html>');
-    w.document.close();
-  } else {
-    alert('无法打开保存窗口，请检查浏览器是否拦截了弹出窗口。');
+    /* 延迟释放 URL，给下载留时间 */
+    setTimeout(() => {
+      try { URL.revokeObjectURL(downloadUrl); } catch (e) {}
+    }, 8000);
+
+    return true;
+  } catch (e) {
+    console.warn('下载失败', e);
+    alert('保存失败：' + (e && e.message ? e.message : '未知错误'));
+    return false;
   }
-  return true;
 }
 
 /* 截图前把所有编辑手柄藏起来（避免被截进去） */
@@ -15463,6 +18025,8 @@ var __orderFilter = {
   customEnd: '',
   tags: [],
   statuses: [],
+  ip: '',
+  attribute: '',
 };
 var __orderFilterResults = [];
 
@@ -15502,6 +18066,28 @@ function renderOrderFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史标签，先在小票页添加</span>';
 
+  /* IP 列表 */
+  const ipList = collectHistoryFieldValues('ip');
+  const ipListHtml = ipList.length
+    ? ipList.map(v => {
+        const sel = state.ip === v;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleOrderFilterIP(\'' + escapeAttr(v) + '\')">' +
+               escapeHtml(v) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史 IP</span>';
+
+  /* 属性列表 */
+  const attrList = collectHistoryFieldValues('attribute');
+  const attrListHtml = attrList.length
+    ? attrList.map(v => {
+        const sel = state.attribute === v;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleOrderFilterAttribute(\'' + escapeAttr(v) + '\')">' +
+               escapeHtml(v) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史属性</span>';
+
   /* 状态按钮 */
   const statusBtns = ORDER_FILTER_STATUSES.map(s => {
     const sel = state.statuses.indexOf(s.key) > -1;
@@ -15533,6 +18119,16 @@ function renderOrderFilterModal() {
           </div>
 
           <div class="ofm-section">
+            <label class="ofm-section-label">IP（单选）</label>
+            <div class="ofm-tag-list">${ipListHtml}</div>
+          </div>
+
+          <div class="ofm-section">
+            <label class="ofm-section-label">属性（单选）</label>
+            <div class="ofm-tag-list">${attrListHtml}</div>
+          </div>
+
+          <div class="ofm-section">
             <label class="ofm-section-label">状态（多选）</label>
             <div class="ofm-status-list">${statusBtns}</div>
           </div>
@@ -15547,6 +18143,68 @@ function renderOrderFilterModal() {
         </div>
       </div>
     </div>`;
+}
+
+/* 收集历史订单里某个字段的所有值（去重 + 按出现次数排序） */
+function collectHistoryFieldValues(field) {
+  const counter = {};
+  const sources = [].concat(
+    getTodos(),
+    getCompleted(),
+    getCancelled(),
+    getDiscarded()
+  );
+  sources.forEach(item => {
+    if (!item || !item.receiptSnapshot) return;
+    const v = String(item.receiptSnapshot[field] || '').trim();
+    if (!v) return;
+    counter[v] = (counter[v] || 0) + 1;
+  });
+  return Object.keys(counter).sort((a, b) => {
+    if (counter[b] !== counter[a]) return counter[b] - counter[a];
+    return a.localeCompare(b, 'zh-Hans-CN');
+  });
+}
+
+function toggleOrderFilterIP(name) {
+  __orderFilter.ip = (__orderFilter.ip === name) ? '' : name;
+  /* 局部刷新 */
+  const list = collectHistoryFieldValues('ip');
+  const html = list.map(v => {
+    const sel = __orderFilter.ip === v;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleOrderFilterIP(\'' + escapeAttr(v) + '\')">' +
+           escapeHtml(v) + '</span>';
+  }).join('');
+  const secs = document.querySelectorAll('.ofm-section');
+  for (const sec of secs) {
+    const lbl = sec.querySelector('.ofm-section-label');
+    if (lbl && lbl.textContent.trim().indexOf('IP') === 0) {
+      const box = sec.querySelector('.ofm-tag-list');
+      if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史 IP</span>';
+      break;
+    }
+  }
+}
+
+function toggleOrderFilterAttribute(name) {
+  __orderFilter.attribute = (__orderFilter.attribute === name) ? '' : name;
+  const list = collectHistoryFieldValues('attribute');
+  const html = list.map(v => {
+    const sel = __orderFilter.attribute === v;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleOrderFilterAttribute(\'' + escapeAttr(v) + '\')">' +
+           escapeHtml(v) + '</span>';
+  }).join('');
+  const secs = document.querySelectorAll('.ofm-section');
+  for (const sec of secs) {
+    const lbl = sec.querySelector('.ofm-section-label');
+    if (lbl && lbl.textContent.trim().indexOf('属性') === 0) {
+      const box = sec.querySelector('.ofm-tag-list');
+      if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史属性</span>';
+      break;
+    }
+  }
 }
 
 function setOrderFilterRange(k) {
@@ -15589,7 +18247,7 @@ function toggleOrderFilterStatus(k) {
 }
 
 function clearOrderFilter() {
-  __orderFilter = { range: 'all', customStart: '', customEnd: '', tags: [], statuses: [] };
+  __orderFilter = { range: 'all', customStart: '', customEnd: '', tags: [], statuses: [], ip: '', attribute: '' };
   renderOrderFilterModal();
 }
 
@@ -15628,6 +18286,18 @@ function applyOrderFilter() {
     if (!itemTags || !itemTags.length) return false;
     return itemTags.some(t => state.tags.indexOf(t.name) > -1);
   };
+  const ipMatch = (item) => {
+    if (!state.ip) return true;
+    const snap = item && item.receiptSnapshot;
+    if (!snap) return false;
+    return String(snap.ip || '').trim() === state.ip;
+  };
+  const attrMatch = (item) => {
+    if (!state.attribute) return true;
+    const snap = item && item.receiptSnapshot;
+    if (!snap) return false;
+    return String(snap.attribute || '').trim() === state.attribute;
+  };
   const statusMatch = (s) => {
     if (!state.statuses.length) return true;
     return state.statuses.indexOf(s) > -1;
@@ -15649,6 +18319,8 @@ function applyOrderFilter() {
     if (!rangeMatch(t.orderDate)) return;
     if (!statusMatch(s)) return;
     if (!tagMatch(t.tags)) return;
+    if (!ipMatch(t)) return;
+    if (!attrMatch(t)) return;
 
     results.push({ type: 'todo', status: s, data: t, orderDate: t.orderDate || '' });
   });
@@ -15658,6 +18330,8 @@ function applyOrderFilter() {
     if (!rangeMatch(c.orderDate)) return;
     if (!statusMatch('completed')) return;
     if (!tagMatch(c.tags)) return;
+    if (!ipMatch(c)) return;
+    if (!attrMatch(c)) return;
     results.push({ type: 'completed', status: 'completed', data: c, orderDate: c.orderDate || '' });
   });
 
@@ -15666,6 +18340,8 @@ function applyOrderFilter() {
     if (!rangeMatch(c.orderDate)) return;
     if (!statusMatch('cancelled')) return;
     if (!tagMatch(c.tags)) return;
+    if (!ipMatch(c)) return;
+    if (!attrMatch(c)) return;
     results.push({ type: 'cancelled', status: 'cancelled', data: c, orderDate: c.orderDate || '' });
   });
 
@@ -15674,6 +18350,8 @@ function applyOrderFilter() {
     if (!rangeMatch(c.orderDate)) return;
     if (!statusMatch('discarded')) return;
     if (!tagMatch(c.tags)) return;
+    if (!ipMatch(c)) return;
+    if (!attrMatch(c)) return;
     results.push({ type: 'discarded', status: 'discarded', data: c, orderDate: c.orderDate || '' });
   });
 
@@ -15857,6 +18535,22 @@ var USER_MANUAL_MODULES = [
     title: '快速上手',
     items: [
       {
+        title: '新版功能导览',
+        html: `
+          <p>本版本新增了几个重要功能，按需查看：</p>
+          <ul>
+            <li><strong>自定义算法</strong>：小票页 → 「算法」按钮</li>
+            <li><strong>设置平台服务费</strong>：组内「组服务费」/ 「其他」面板的「总服务费」</li>
+            <li><strong>小票太啰嗦</strong>：小票设置 → 「内容」标签 → 智能简洁</li>
+            <li><strong>不同平台用不同 ID</strong>：小票页 → 「画师 / 美工」下拉框</li>
+            <li><strong>结单后发单主</strong>：结单流程最后一步 → 生成结单小票</li>
+            <li><strong>找同一个 IP 的订单</strong>：订单 / 票夹 → 筛选 → IP</li>
+            <li><strong>批量删小票图片</strong>：票夹 → 管理</li>
+          </ul>
+          <p>详细说明见下方各章节。</p>
+        `
+      },
+      {
         title: '一、整体流程',
         html: `
           <p>本应用把接单流程拆成「小票 → 订单 → 结单」三步：</p>
@@ -15903,12 +18597,12 @@ var USER_MANUAL_MODULES = [
       }
     ]
   },
-  {
+      {
     id: 'receipt',
     title: '小票',
     items: [
       {
-        title: '企划信息',
+        title: '一、企划信息',
         html: `
           <p>带 <span style="color:#e74c3c">*</span> 的字段为必填：</p>
           <ul>
@@ -15917,12 +18611,98 @@ var USER_MANUAL_MODULES = [
             <li>排单日期</li>
             <li>截稿日期</li>
           </ul>
+          <p>其余（企划名称、IP、属性、角色）都可留空，留空的小票上不显示。</p>
           <p>点单主 ID 右侧的<strong>小人图标</strong>，可从「单主」列表快速选人。</p>
           <p>填写「工期」会自动推算截稿日期；手动改截稿日期后工期会清空。</p>
         `
       },
       {
-        title: '占位单',
+        title: '二、IP / 属性 / 角色的区别',
+        html: `
+          <p>四个字段容易混，用两个例子区分：</p>
+
+          <h3>例子 1：别凡属性的娃稿</h3>
+          <ul>
+            <li><strong>IP</strong>：作品 / 系列名（如"囧徒之预演告别"）</li>
+            <li><strong>属性</strong>：原作角色名（如"别凡"）</li>
+            <li><strong>角色</strong>：这张娃稿本身的名字（如"不凡"）</li>
+          </ul>
+
+          <h3>例子 2：原创角色（OC）</h3>
+          <ul>
+            <li><strong>IP</strong>：可留空（原创没有原作）</li>
+            <li><strong>属性</strong>：可留空</li>
+            <li><strong>角色</strong>：OC 的名字（如"豆豆"）</li>
+          </ul>
+
+          <h3>一句话总结</h3>
+          <ul>
+            <li><strong>企划名称</strong>：整个项目的名字</li>
+            <li><strong>IP</strong>：作品 / 系列名</li>
+            <li><strong>属性</strong>：参考的原作角色名</li>
+            <li><strong>角色</strong>：这张稿件自己的名字</li>
+          </ul>
+
+          <p>四个字段都会显示在小票的企划信息区，有就显示，没有就跳过。</p>
+          <p>订单筛选和票夹筛选支持按 <strong>IP + 属性</strong>快速查找。</p>
+        `
+      },
+      {
+        title: '三、画师 / 美工 ID',
+        html: `
+          <p>小票页「接单平台」下面有「画师 / 美工」这一行，由两部分组成：</p>
+          <ul>
+            <li><strong>下拉框</strong>：选身份（画师 / 美工 / 你在设置里加的其他身份）</li>
+            <li><strong>输入框</strong>：填 ID</li>
+          </ul>
+          <p><strong>默认值</strong>：从「设置 → 基础信息」里自动带出。</p>
+          <p><strong>可以改</strong>：改完只影响这一张订单。下次开新小票，又会回到设置里的默认值。</p>
+          <p><strong>为什么要有这个</strong>：有的用户不同平台用不同 ID，比如 QQ 用"小明"，小红书用"小明画稿"。</p>
+          <p>小票上的落款会显示：你选的身份 + 你填的 ID。</p>
+        `
+      },
+      {
+        title: '四、定制细则',
+        html: `
+          <p>支持多稿件组，每组可加多个稿件。</p>
+
+          <h3>权限开关</h3>
+          <p>控制稿件是否需要选"权限"（自用 / 商用 / 买断）。关闭后不需要选权限，小票也不显示权限列。</p>
+
+          <h3>算法按钮</h3>
+          <p>点标题右侧的<strong>「算法」</strong>按钮，可以自由搭配四组算法：组附加、组折扣、总附加、总折扣。每组旁边有 ⓘ 图标可查看说明和示例。</p>
+          <p>详见「算法」章节。</p>
+
+          <h3>占位开关</h3>
+          <p>打开后可以不填稿件内容，只需填一个排单费。见下一条说明。</p>
+
+          <h3>每个稿件</h3>
+          <ul>
+            <li><strong>增项</strong>：每件加价，算法可选 × 或 ＋</li>
+            <li><strong>节点</strong>：按比例拆分，一个稿件的所有节点比例合计必须 = 100%</li>
+            <li>两类可以共存。详见「算法」章节</li>
+          </ul>
+        `
+      },
+      {
+        title: '五、定金与预付',
+        html: `
+          <h3>定金开关</h3>
+          <p>默认开启。选择"画加"或"米画师"平台时会自动关闭（这两个平台不用定金模式）。</p>
+          <p>关闭后系统不再自动计算预付款，可以手动在"预付金额"里填。</p>
+
+          <h3>预付金额</h3>
+          <p>点"其他"面板里的<strong>「预付金额」</strong>按钮打开弹窗：</p>
+          <ul>
+            <li>可以选<strong>有预付款</strong>或<strong>无预付款</strong></li>
+            <li>有预付款时，弹窗会显示系统计算<strong>过程和结果</strong></li>
+            <li>结果可以<strong>手动修改</strong>（一切以用户输入为准）</li>
+            <li>选"无预付款"时，小票上不显示"预付金额"和"待结尾款"</li>
+          </ul>
+        `
+      },
+      {
+        title: '六、占位单',
         html: `
           <p>打开「占位」开关后：</p>
           <ul>
@@ -15934,73 +18714,140 @@ var USER_MANUAL_MODULES = [
         `
       },
       {
-        title: '定制细则',
+        title: '七、其他费用',
         html: `
-          <p>支持多稿件组，每组可加多个稿件。</p>
-          <p>每个稿件可以同时挂两类东西：</p>
+          <p>小票页最下方的「其他」面板包含：</p>
           <ul>
-            <li><strong>增项</strong>：每件加价，算法可选 ×（按基础价的百分比）或 ＋（固定金额）</li>
-            <li><strong>节点</strong>：按比例拆分，一个稿件的所有节点比例合计必须 = 100%</li>
+            <li><strong>订单级附加费用</strong>：基于订单总价</li>
+            <li><strong>订单级优惠折扣</strong>：基于订单总价</li>
+            <li><strong>赠品</strong>：不计入应付，仅在小票上展示</li>
+            <li><strong>预付金额</strong>：见上一条</li>
+            <li><strong>总服务费</strong>：整个订单的服务费，基数 = 订单总价</li>
           </ul>
-          <p><strong>两类可以共存。</strong>例如基础价 100、增项「复杂设 +20」，再加节点「草稿 30%」——节点按 <strong>120 × 30%</strong> 计算，即 36。</p>
-          <p>每个稿件都必须选择「权限」，权限倍率会乘到该稿件小计上。</p>
+          <p>服务费详细规则见「服务费」章节。</p>
         `
       },
       {
-        title: '其他费用',
+        title: '八、小票设置',
         html: `
-          <p>小票页最下方的「其他」面板包含三类：</p>
+          <p>点小票右上角的<strong>画笔图标</strong>打开右侧设置面板。面板顶部有三个标签：</p>
           <ul>
-            <li><strong>订单级附加费用</strong>：基于订单总价，算法 × 或 ＋</li>
-            <li><strong>订单级优惠折扣</strong>：基于订单总价，算法 × 或 −</li>
-            <li><strong>赠品</strong>：不计入应付，仅在小票上展示</li>
+            <li><strong>基础</strong>：票头图 / 票尾图 / 背景图上传，字体选择，字号调整</li>
+            <li><strong>样式</strong>：背景色、字体主色 / 辅色、线条颜色</li>
+            <li><strong>内容</strong>：智能简洁按钮 + 三个显示开关（组原价 / 组小计 / 总合计）</li>
           </ul>
+          <p>三个标签的改动都会一起存进小票预设。</p>
         `
       },
-            {
-        title: '小票设置',
+      {
+        title: '九、小票太啰嗦怎么办',
         html: `
-          <p>点小票右上角的<strong>画笔图标</strong>打开右侧设置面板，可以：</p>
+          <p>小票默认会显示很多金额行（组原价、组小计、总合计等），为了让用户看清楚每一笔怎么算的。</p>
+          <p>如果嫌太繁琐，可以：</p>
+          <ol>
+            <li>打开小票设置 → 点「<strong>内容</strong>」标签</li>
+            <li>点「<strong>智能简洁</strong>」按钮</li>
+          </ol>
+          <p>三个中间量（组原价 / 组小计 / 总合计）就会被隐藏。</p>
           <ul>
-            <li>在「基础」标签页：上传票头 / 票尾 / 背景图，支持拖拽、缩放、拉伸</li>
-            <li>在「基础」标签页：选择字体（含内置在线字体、可导入本地字体）、调整整体字号（黑点为默认值，点击恢复）</li>
-            <li>在「样式」标签页：修改背景色、字体主色 / 辅色</li>
-            <li>保存 / 加载小票预设（最多 5 个）</li>
+            <li><strong>永远显示</strong>：稿件明细、组合计、订单总价、应付金额</li>
+            <li><strong>有值才显示</strong>：附加、折扣、服务费、预付、待结</li>
           </ul>
+          <p>也可以<strong>手动勾选</strong>，精细控制哪些行显示。</p>
+          <p><strong>说明</strong>：智能简洁只影响显示，不影响计算。金额一分钱都不会变。</p>
         `
       },
+      {
+        title: '十、订单编号',
+        html: `
+          <p>小票上的订单编号格式：<code>NO.年月日+2位随机数</code>。</p>
+          <p>编号在<strong>导入订单时固定</strong>。之后编辑小票、转立项单、重新生成，编号都不会变。</p>
+          <p>订单卡片、订单详情、统计明细、结单 / 撤单 / 废稿记录，都会显示这个编号。</p>
+          <p>老订单如果缺编号，可以到「工具箱 → 数据修复」跑一次，会自动补上并重新生成小票。</p>
+        `
+      }
     ]
   },
-  {
+   {
     id: 'order',
     title: '订单',
     items: [
       {
-        title: '四类订单',
+        title: '一、四类订单',
         html: `
-          <p>订单分为四类，用四个圆按钮切换：</p>
+          <p>用顶部四个圆按钮切换：</p>
           <ul>
             <li><strong>待</strong>：进行中的订单</li>
             <li><strong>结</strong>：已完成结单</li>
-            <li><strong>撤</strong>：已撤单（可记录跑单费或退款）</li>
-            <li><strong>废</strong>：已废稿（可记录废稿费或退款）</li>
+            <li><strong>撤</strong>：已撤单</li>
+            <li><strong>废</strong>：已废稿</li>
           </ul>
+          <p>每张卡片显示：订单编号、单主名、标签、完成进度、剩余天数（或待结金额）。</p>
         `
       },
       {
-        title: '结单',
+        title: '二、订单编号',
         html: `
-          <p>订单详情页所有事项都勾选完成后，点卡片右侧「结单」按钮。</p>
-          <p>结单弹窗里可以：</p>
+          <p>编号格式：<code>NO.年月日+2位随机数</code>（如 NO.2026092145）。</p>
+          <p><strong>导入订单那一刻固定</strong>。之后编辑小票、转立项单、重新生成小票，编号都不变。</p>
+          <p>显示位置：</p>
           <ul>
-            <li>给尾款打折（按总应收比例 / 按尾款比例 / 具体金额）</li>
-            <li>选择「已收到」→ 订单结单，进入「结」页面，计入实收统计</li>
-            <li>选择「尚未收到」→ 订单标记为待结，金额留在待结统计里</li>
+            <li>订单卡片标题后面（灰色小字）</li>
+            <li>订单详情页标题下方</li>
+            <li>结单 / 撤单 / 废稿详情弹窗</li>
+            <li>统计明细里每条流水后面</li>
           </ul>
+          <p><strong>老订单</strong>如果缺编号，可以到「工具箱 → 数据修复」跑一次，系统会自动补上，并且重新生成该订单的小票（让小票上的编号跟卡片一致）。</p>
         `
       },
       {
-        title: '撤单 / 废稿',
+        title: '三、结单流程',
+        html: `
+          <p>点击订单卡片右侧「结单」按钮，或三横线菜单里的「结单」：</p>
+          <ol>
+            <li><strong>尾款优惠</strong>（可选）：给尾款打折</li>
+            <li><strong>确认收款</strong>：选"已收到"或"尚未收到"
+              <ul>
+                <li>尚未收到 → 订单标记为待结，金额留在待结统计里</li>
+              </ul>
+            </li>
+            <li><strong>核对实收</strong>（新增）：显示应付款 / 预付款 / 原尾款 / 最终确认尾款 / 服务费 / 总实收（不含服务费）
+              <ul>
+                <li>"最终确认尾款"和"总实收"都能改，互相联动</li>
+              </ul>
+            </li>
+            <li><strong>生成结单小票</strong>：自动生成一张结单版小票</li>
+            <li><strong>保存到相册</strong>：点按钮下载 / 分享图片，弹窗关闭 → 回到"结"页面</li>
+          </ol>
+        `
+      },
+      {
+        title: '四、结单小票',
+        html: `
+          <p>结单后自动生成的"结单版小票"：</p>
+          <ul>
+            <li>保留：企划信息、稿件组明细、总附加 / 总折扣 / 订单总价、总服务费（如有）</li>
+            <li><strong>删除</strong>：应付金额、预付金额、待结尾款</li>
+            <li><strong>新增</strong>：实付金额（不含服务费）—— 大字显示</li>
+          </ul>
+          <p>这张结单小票会<strong>覆盖</strong>结单记录里原有的小票图片。票夹、结单详情打开时看到的都是它。</p>
+          <p>老订单（改动前结的）没有结单小票，显示原来的小票。</p>
+        `
+      },
+      {
+        title: '五、待结单',
+        html: `
+          <p>结单时选"尚未收到"的订单，状态变为<strong>待结</strong>。</p>
+          <ul>
+            <li>卡片左侧显示橙色"待结"标签</li>
+            <li>卡片右侧显示待结金额</li>
+            <li>卡片右下角有独立"结单"按钮，点了直接确认收款</li>
+          </ul>
+          <p>待结单的"待结尾款"金额<strong>不含服务费</strong>。</p>
+        `
+      },
+      {
+        title: '六、撤单 / 废稿',
         html: `
           <p>点订单卡片右侧「⋮」菜单：</p>
           <ul>
@@ -16008,16 +18855,56 @@ var USER_MANUAL_MODULES = [
             <li><strong>废稿</strong>：可收废稿费 / 不收 / 退费</li>
           </ul>
           <p>撤单和废稿都会把订单从「待」页面移走，并在对应页面留下记录。</p>
+          <p>撤单 / 废稿<strong>不保存小票图片</strong>，省内存。详情里也不显示小票。</p>
         `
       },
       {
-        title: '素材与要求',
+        title: '七、订单搜索',
+        html: `
+          <p>「待」页顶部有搜索框，可以搜：</p>
+          <ul>
+            <li>单主 ID</li>
+            <li>企划名 / 角色名</li>
+            <li>联系方式</li>
+            <li>标签名</li>
+          </ul>
+          <p>输入即搜，实时过滤。</p>
+        `
+      },
+      {
+        title: '八、订单筛选',
+        html: `
+          <p>「待」页右上角<strong>筛选</strong>按钮，可按以下条件组合筛选：</p>
+          <ul>
+            <li><strong>接单时间</strong>：全部 / 本月 / 本年 / 自定义</li>
+            <li><strong>标签</strong>：多选，任意匹配</li>
+            <li><strong>IP</strong>：单选</li>
+            <li><strong>属性</strong>：单选</li>
+            <li><strong>状态</strong>：多选（未完成 / 待开单 / 待结 / 已结单 / 已撤单 / 已废稿）</li>
+          </ul>
+          <p>不同组条件是"与"关系，同组内是"或"关系。详见「标签与筛选」章节。</p>
+        `
+      },
+      {
+        title: '九、订单批量管理',
+        html: `
+          <p>右上角「管理」按钮进入多选模式：</p>
+          <ul>
+            <li>点卡片勾选 / 取消</li>
+            <li>「全选」一键勾选所有当前显示的项</li>
+            <li>「删除」批量删除（订单会连同流水一起删）</li>
+            <li>「完成」退出管理模式</li>
+          </ul>
+        `
+      },
+      {
+        title: '十、素材与要求',
         html: `
           <p>订单详情页的「素材」「要求」是两个文件夹按钮：</p>
           <ul>
             <li>点文件夹按钮上传图片，支持多选</li>
-            <li>缩略图点击可以查看大图</li>
-            <li>右上角 × 可以删除单张图片</li>
+            <li>缩略图点击查看大图</li>
+            <li>右上角 × 删除单张</li>
           </ul>
         `
       }
@@ -16129,15 +19016,20 @@ var USER_MANUAL_MODULES = [
           <p>「工具箱 → 数据修复」用于：</p>
           <ul>
             <li>升级存档到最新版本规则</li>
+            <li>修复重复 / 缺失的事项 ID（修完待办细则就能正常勾选）</li>
+            <li>给老订单补缺失的字段和订单编号</li>
+            <li>重新生成待办订单的小票（让编号和卡片一致）</li>
             <li>补录历史订单缺失的流水</li>
             <li>建立单主档案索引</li>
           </ul>
-          <p>修复前会自动备份，可重复点击不会重复累加。</p>
+          <p><strong>幂等设计</strong>：修过一次之后，再点就秒过，不会重复做无用功。</p>
+          <p>修复前会自动备份，可重复点击。老订单多的话第一次跑可能需要 30 秒左右，期间会弹出进度条。</p>
+          <p><strong>已结单 / 撤单 / 废稿的小票图片不会重新生成</strong>，因为那是历史记录，不该改动。</p>
         `
       }
     ]
   },
-  {
+     {
     id: 'faq',
     title: '常见问题',
     items: [
@@ -16147,7 +19039,8 @@ var USER_MANUAL_MODULES = [
           <p>检查以下必填项是否完整：</p>
           <ul>
             <li>单主 ID、接单日期、排单日期、截稿日期</li>
-            <li>每个稿件的名称、单价、数量、权限</li>
+            <li>画师 / 美工 ID</li>
+            <li>每个稿件的名称、单价、数量、权限（如果权限开关开着）</li>
             <li>如果用了节点，所有节点的比例合计必须 = 100%</li>
           </ul>
           <p>点「确定生成」时若有问题，会弹窗列出所有缺项，可点提示直接跳到对应位置。</p>
@@ -16156,7 +19049,7 @@ var USER_MANUAL_MODULES = [
       {
         title: '本地字体刷新后消失了？',
         html: `
-          <p>现在导入的本地字体<strong>已经会自动保存</strong>，刷新网页或重新打开都不会丢失。</p>
+          <p>本地字体<strong>已经会自动保存</strong>，刷新网页或重新打开都不会丢失。</p>
           <p>但受浏览器限制与版权容量考量，字体文件仅保存在当前设备的浏览器中。换设备或清理浏览器缓存后，需要重新导入。</p>
         `
       },
@@ -16168,8 +19061,8 @@ var USER_MANUAL_MODULES = [
           <ol>
             <li>先到「工具箱 → 手动同步 → 导出数据」做备份</li>
             <li>检查「小票设置」里有没有不需要的旧图片，点「清除」删掉</li>
-            <li>检查「票夹」里不需要的小票，进对应订单删除</li>
-            <li>清理完再导入备份</li>
+            <li>到「票夹」里删除不需要的小票图片（不影响订单）</li>
+            <li>撤单 / 废稿默认不保存小票图片，已自动省内存</li>
           </ol>
         `
       },
@@ -16179,21 +19072,20 @@ var USER_MANUAL_MODULES = [
           <p>三步：</p>
           <ol>
             <li>旧设备打开「工具箱 → 手动同步 → 导出数据」，得到 JSON 文件</li>
-            <li>把 JSON 文件传到新设备（微信 / QQ / 邮件等）</li>
+            <li>把 JSON 传到新设备</li>
             <li>新设备打开「工具箱 → 手动同步 → 导入数据」，选择文件</li>
           </ol>
-          <p>导入后会提示恢复了多少项设置和多少张图片，页面自动刷新。</p>
         `
       },
       {
         title: '占位单是什么？怎么转成正式订单？',
         html: `
-          <p>占位单是「先占坑、还没定稿」的订单。打开小票页的「占位」开关即可创建，只需填排单费。</p>
+          <p>占位单是"先占坑、还没定稿"的订单。打开小票页的「占位」开关即可创建，只需填排单费。</p>
           <p>要转正式单：</p>
           <ol>
-            <li>订单列表点进占位单的详情页</li>
+            <li>订单列表点进占位单详情页</li>
             <li>点「转立项单」按钮</li>
-            <li>如果已收排单费，会问「是否用排单费抵扣预付款」，按需选择</li>
+            <li>如果已收排单费，会问「是否用排单费抵扣预付款」</li>
             <li>填写立项内容后点「确定生成」，再点小票右上角第一个图标导入</li>
           </ol>
         `
@@ -16203,250 +19095,487 @@ var USER_MANUAL_MODULES = [
         html: `
           <ul>
             <li><strong>结单</strong>：正常完成，进入「结」页面，计入实收</li>
-            <li><strong>撤单</strong>：单主取消，可退全款 / 退尾款 / 收跑单费，进入「撤」页面</li>
-            <li><strong>废稿</strong>：作品废弃，可收废稿费 / 不收 / 退费，进入「废」页面</li>
+            <li><strong>撤单</strong>：单主取消，可退全款 / 退尾款 / 收跑单费</li>
+            <li><strong>废稿</strong>：作品废弃，可收废稿费 / 不收 / 退费</li>
           </ul>
-          <p>三者都会从「待」页面移除，但记录所在页面不同。</p>
+          <p>三者都会从「待」页面移除，但记录所在页面不同。撤单 / 废稿不留小票图片。</p>
         `
       },
       {
         title: '为什么统计数字和订单金额对不上？',
         html: `
-          <p>统计的「实收」按<strong>流水发生日期</strong>汇总，而不是订单日期。</p>
+          <p>统计的"实收"按<strong>流水发生日期</strong>汇总，不是订单日期。</p>
           <p>比如 8 月的订单，尾款 9 月才收，那么 8 月的实收里只有预付款，9 月才有尾款。</p>
-          <p>「待结」则会一直挂在未结清订单上，跟日期范围无关（只统计当前未完成的订单）。</p>
+          <p>"待结"会一直挂在未结清订单上，跟日期范围无关。</p>
         `
       },
       {
-        title: '权限倍率是怎么用的？',
+        title: '服务费为什么不计入实收？',
         html: `
-          <p>权限倍率在「设置 → 基础信息 → 使用权限预设」里配置。</p>
-          <p>每个稿件选择权限后，该稿件的<strong>小计 × 权限倍率</strong>参与订单总价计算。</p>
-          <p>例如：稿件单价 100 元 × 2 件 = 200 元，权限选「商用 ×2」→ 实际计入 400 元。</p>
-        `
-      },
-      {
-        title: '节点比例为什么必须等于 100%？',
-        html: `
-          <p>节点是「按总价按比例拆分」的收款节点（如草稿 30%、线稿 30%、成图 40%）。</p>
-          <p>如果一个稿件的节点比例合计不等于 100%，说明拆分不完或超出总价，无法确定金额。</p>
-          <p>生成小票时会校验，合计 ≠ 100% 会提示无法生成。</p>
-        `
-      },
-      {
-        title: '预付款什么时候会自动计算？',
-        html: `
-          <p>预付款有三种算法，按订单类型自动选择：</p>
+          <p>服务费是<strong>平台收的钱</strong>，用户拿不到。</p>
+          <p>所以：</p>
           <ul>
-            <li><strong>占位单</strong>：直接等于填写的排单费</li>
-            <li><strong>纯节点单</strong>（所有稿件都用节点计价）：预付款 = 第一个节点的金额之和</li>
-            <li><strong>普通订单</strong>：按定金模式计算（百分比或固定金额）</li>
+            <li>服务费加到买家应付上</li>
+            <li>但<strong>不</strong>计入用户实收</li>
+            <li><strong>不</strong>计入待结</li>
+            <li><strong>不</strong>计入单主累计消费</li>
           </ul>
+          <p>结单小票上写"实付金额（不含服务费）"就是这个意思。</p>
         `
       },
       {
-        title: '「未知单主」是什么？',
+        title: '定金开关和预付金额有什么关系？',
         html: `
-          <p>如果订单创建时没填「单主 ID」，就会归到「未知单主」这个虚拟条目下。</p>
-          <p>它不是真正的单主档案，不能编辑备注，建议到对应订单补全 ID。</p>
+          <p>两者是<strong>两件事</strong>：</p>
+          <ul>
+            <li><strong>定金开关</strong>：控制"系统怎么算预付款"（关掉后系统不再自动算）</li>
+            <li><strong>预付金额</strong>：控制"这次到底收不收预付"和"收多少"</li>
+          </ul>
+          <p>关掉定金开关<strong>不代表</strong>没有预付款，仍然可以在"预付金额"里手动填。</p>
+          <p>选"画加""米画师"时定金开关会自动关，因为这两个平台不走定金模式。</p>
         `
       },
       {
-        title: '图片文件存在哪里？会被压缩吗？',
+        title: '为什么结单后小票变了？',
         html: `
-          <p>上传的图片存在浏览器的 IndexedDB 里，以原图 Blob 保存，不做压缩。</p>
-          <p>小票图片是 html2canvas 生成的 PNG，按小票当前尺寸 2 倍分辨率导出。</p>
+          <p>结单后系统会生成一张<strong>结单版小票</strong>，用来发给单主（因为款已经收了）。</p>
+          <ul>
+            <li>保留企划信息和稿件明细</li>
+            <li>删掉"应付 / 预付 / 待结"</li>
+            <li>改成大字显示"实付金额（不含服务费）"</li>
+          </ul>
+          <p>这张结单小票会覆盖原来的小票图片。结单详情、票夹打开时看到的都是它。</p>
         `
       },
       {
-        title: '为什么小票长按拖动/缩放没反应？',
+        title: '怎么快速找出同一个 IP 的所有订单？',
         html: `
-          <p>小票上的图片（票头 / 票尾 / 背景）需要先进入编辑态才能操作：</p>
+          <p>两种方式：</p>
           <ol>
-            <li>点小票右上角画笔图标打开设置面板</li>
-            <li>点「票头图片 / 票尾图片 / 背景图片」按钮</li>
-            <li>进入编辑态后：图片任意位置可拖，右下角红点等比缩放，边缘虚线可拉伸</li>
+            <li>订单页 → 筛选 → 在 IP 行点一个 IP 名 → 确定</li>
+            <li>票夹 → 筛选 → 在 IP 行点一个 IP 名 → 确定</li>
           </ol>
-          <p>保存图片或关闭设置面板时会自动退出编辑态。</p>
+          <p>IP 和属性列表是<strong>从历史订单自动收集</strong>的，会出现过的 IP / 属性都列出来。</p>
+          <p>想按"原作角色"找，用属性行；想按"作品系列"找，用 IP 行。</p>
         `
       },
       {
-        title: '增项和节点能一起用吗？',
+        title: '小票金额行太多怎么办？',
         html: `
-          <p>能。同一稿件里可以同时挂增项和节点。</p>
-          <p>计算时：先算增项，得到<strong>单元原价</strong>，节点再按这个原价 × 比例算。</p>
-          <p>例如基础价 100、增项 +20、节点 草稿 30% → 草稿金额 = 120 × 30% = 36。</p>
-          <p>小票上增项显示为 <code>└</code>，节点显示为 <code>◆</code>，方便区分。</p>
-        `
-      },
-    ]
-  },
-  {
-    id: 'algorithm',
-    title: '算法',
-    items: [
-      {
-        title: '单稿件小计',
-        html: `
-          <p>普通稿件：</p>
-          <span class="um-formula">小计 = (基础价 + 增项合计) × 数量 × 权限倍率</span>
-          <p>含节点的稿件：</p>
-          <span class="um-formula">小计 = (单元原价 × 各节点比例%之和) × 数量 × 权限倍率</span>
-          <p>因为节点比例合计必须 = 100%，两种算法最终金额一致。</p>
-        `
-      },
-      {
-        title: '增项计算',
-        html: `
-          <p>两种算法：</p>
-          <ul>
-            <li><strong>×（按单价比例）</strong>：增项金额 = 单价 × 数值 / 100</li>
-            <li><strong>＋（固定金额）</strong>：增项金额 = 数值</li>
-          </ul>
-          <p>增项金额会累加到单价上，再乘以数量与权限倍率。</p>
-        `
-      },
-      {
-        title: '节点计算',
-        html: `
-          <span class="um-formula">节点金额 = 单元原价 × 节点比例% × 数量 × 权限倍率</span>
-          <p>其中 <strong>单元原价 = 基础价 + 增项合计</strong>。</p>
-          <p>一个稿件的所有节点比例合计必须 = 100%。</p>
-        `
-      },
-      {
-        title: '增项与节点混合',
-        html: `
-          <p>同一稿件可以同时有增项和节点。计算顺序：</p>
+          <p>小票默认会显示所有金额行（组原价、组小计、总合计等），信息完整但看着繁琐。</p>
+          <p>简化方法：</p>
           <ol>
-            <li>先算<strong>增项合计</strong>（× 按基础价百分比，＋ 按固定金额）</li>
-            <li><strong>单元原价 = 基础价 + 增项合计</strong></li>
-            <li>节点按<strong>单元原价</strong>× 比例算</li>
+            <li>打开小票设置 → 点「<strong>内容</strong>」标签</li>
+            <li>点「<strong>智能简洁</strong>」按钮</li>
           </ol>
-          <p>举例：基础价 100，增项「复杂设 +20」，节点「草稿 30%」</p>
-          <span class="um-formula">单元原价 = 100 + 20 = 120
-草稿金额 = 120 × 30% = 36</span>
-          <p>小票上：增项前面是 <code>└</code>，节点前面是 <code>◆</code>，两者区分显示。</p>
+          <p>三个中间量会被隐藏，只保留核心数字。</p>
+          <p>也可以<strong>手动勾选</strong>控制哪几行显示。</p>
+          <p><strong>说明</strong>：只影响显示，金额一分钱都不会变。</p>
         `
       },
       {
-        title: '稿件组小计',
+        title: '画师 / 美工 ID 怎么用？',
         html: `
-          <span class="um-formula">组小计 = 组内所有稿件小计之和</span>
-          <p>组小计是组附加费用和组优惠折扣的计算基数。</p>
-        `
-      },
-      {
-        title: '组附加费用',
-        html: `
+          <p>在小票页「接单平台」下面。</p>
           <ul>
-            <li><strong>×（按组小计比例）</strong>：组附加费 = 组小计 × 数值 / 100</li>
-            <li><strong>＋（固定金额）</strong>：组附加费 = 数值</li>
+            <li>下拉框：选身份（画师 / 美工 / 你在设置里加的其他身份）</li>
+            <li>输入框：填 ID</li>
           </ul>
+          <p><strong>默认值</strong>从「设置 → 基础信息」自动带出。</p>
+          <p><strong>可以改</strong>：改完只影响这一张订单。下次开新小票又会回到默认值。</p>
+          <p><strong>用途</strong>：有的用户不同平台用不同 ID，比如 QQ 用"小明"，小红书用"小明画稿"。</p>
+          <p>小票落款处会显示：你选的身份 + 你填的 ID。</p>
         `
       },
       {
-        title: '组优惠折扣',
+        title: '为什么不能同时设组服务费和总服务费？',
         html: `
-          <p>计算基数是「组小计 + 组附加费用」：</p>
+          <p>因为一个订单只会走一个平台，不需要算两次手续费。</p>
+          <p>所以系统<strong>强制二选一</strong>：</p>
           <ul>
-            <li><strong>×（按比例）</strong>：组优惠 = (组小计 + 组附加费) × 数值 / 100</li>
-            <li><strong>−（固定金额）</strong>：组优惠 = 数值</li>
+            <li>已经设了组服务费 → 点"总服务费"会弹提示</li>
+            <li>已经设了总服务费 → 点"组服务费"会弹提示</li>
           </ul>
-          <span class="um-formula">组合计 = 组小计 + 组附加费 − 组优惠</span>
+          <p>要切换：打开当前服务费弹窗 → 点标题右边的<strong>「清除」</strong>按钮 → 清除后再设另一种。</p>
         `
       },
       {
-        title: '订单总价',
+        title: '事项勾不上怎么办？',
         html: `
-          <span class="um-formula">订单总价 = 所有稿件组合计之和</span>
-          <p>订单级附加费用和订单级优惠都以这个总价为基数计算。</p>
-        `
-      },
-      {
-        title: '订单级附加费用与优惠',
-        html: `
-          <ul>
-            <li><strong>订单附加费</strong>：× 时 = 订单总价 × 数值 / 100；＋ 时 = 数值</li>
-            <li><strong>订单优惠</strong>：× 时 = 订单总价 × 数值 / 100；− 时 = 数值</li>
-          </ul>
-          <span class="um-formula">应付金额 = 订单总价 + 订单附加费 − 订单优惠</span>
-        `
-      },
-      {
-        title: '预付款计算',
-        html: `
-          <p>按订单类型自动选择算法：</p>
-          <ul>
-            <li><strong>占位单</strong>：预付款 = 排单费（固定金额）</li>
-            <li><strong>纯节点单</strong>（所有稿件都用节点计价）：预付款 = 每个稿件的第一个节点金额之和</li>
-            <li><strong>普通订单</strong>：
-              <ul>
-                <li>定金模式为百分比：预付款 = 应付金额 × 定金%</li>
-                <li>定金模式为固定金额：预付款 = 定金数值</li>
-              </ul>
-            </li>
-          </ul>
-        `
-      },
-      {
-        title: '尾款',
-        html: `
-          <span class="um-formula">尾款 = 应付金额 − 预付款</span>
-          <p>结单时如果有优惠，实收尾款 = 尾款 − 优惠金额。</p>
-        `
-      },
-      {
-        title: '结单优惠',
-        html: `
-          <p>结单时可以给尾款打折，三种方式：</p>
-          <ul>
-            <li><strong>按总应收比例</strong>：优惠 = 应付金额 × 数值 / 100</li>
-            <li><strong>按尾款比例</strong>：优惠 = 原尾款 × 数值 / 100</li>
-            <li><strong>具体金额</strong>：优惠 = 数值</li>
-          </ul>
-          <span class="um-formula">实收尾款 = 原尾款 − 优惠金额（不低于 0）</span>
-        `
-      },
-      {
-        title: '统计实收',
-        html: `
-          <span class="um-formula">统计实收 = 所有非退款、非支出的流水金额之和</span>
-          <p>包含：预付款、排单费、尾款、废稿费、跑单费、记账收入。</p>
-          <p>按流水的发生日期归入对应统计范围。</p>
-        `
-      },
-      {
-        title: '统计待结',
-        html: `
-          <p>统计当前所有未结清订单的尾款：</p>
-          <ul>
-            <li>标记为「待结」的订单：累加其 pendingAmount</li>
-            <li>未完成的普通订单：累加其原尾款</li>
-          </ul>
-          <p>待结不受日期范围影响，只要订单没结清就计入。</p>
-        `
-      },
-      {
-        title: '统计结余',
-        html: `
-          <span class="um-formula">结余 = 实收 − 退款 − 支出</span>
-        `
-      },
-      {
-        title: '单主累计消费',
-        html: `
-          <p>每位单主卡片上显示的「累计消费」按流水汇总：</p>
-          <ul>
-            <li>该单主关联的所有非退款、非支出流水：+ 金额</li>
-            <li>退款类型流水：− 金额</li>
-          </ul>
-          <p>只统计与该单主相关的订单和结单记录产生的流水。</p>
+          <p>如果发现某条待办细则点不亮，或者点了它旁边那条变了，说明<strong>事项 ID 冲突</strong>了。</p>
+          <p>解决：</p>
+          <ol>
+            <li>打开「工具箱 → 数据修复」</li>
+            <li>点「开始修复」</li>
+          </ol>
+          <p>系统会自动扫描所有订单的 items，发现重复 / 缺失的 ID 就重新分配唯一 ID。</p>
+          <p>修完之后那些勾不上的事项就能正常勾选了。</p>
+          <p><strong>只做一次就行</strong>，以后新订单不会再出这个问题。</p>
         `
       }
     ]
   },
-  
+    {
+    id: 'algorithm',
+    title: '算法',
+    items: [
+      {
+        title: '一、三层中间量（重要）',
+        html: `
+          <p>所有计算都基于三层中间量，理解这三层就能理解所有算法：</p>
+          <ul>
+            <li><strong>组原价</strong>：组内所有稿件「原价 × 数量」之和。不含用途比例。</li>
+            <li><strong>组小计</strong>：组内所有稿件「原价 × 数量 × 用途比例」之和。</li>
+            <li><strong>组合计</strong>：组小计 + 组附加 − 组折扣。</li>
+          </ul>
+          <p>为什么要分三层？因为不同用户 / 平台对"附加和折扣按什么基数算"有不同习惯。分三层后，可以在「算法」弹窗里自由选择。</p>
+        `
+      },
+      {
+        title: '二、单稿件计算',
+        html: `
+          <span class="um-formula">单稿件原价（单元）= 基础价 + 增项合计
+单稿件原价（小计）= 单稿件原价（单元）× 数量
+单稿件合计 = 单稿件原价（小计）× 用途比例</span>
+          <p><strong>用途比例</strong>就是"权限倍率"（如自用 ×1、商用 ×2、买断 ×3）。</p>
+          <p>组原价累加的是"单稿件原价（小计）"；组小计累加的是"单稿件合计"。</p>
+        `
+      },
+      {
+        title: '三、增项与节点',
+        html: `
+          <h3>增项</h3>
+          <p>每件加价。两种算法：</p>
+          <ul>
+            <li><strong>×</strong>：增项金额 = 单价 × 数值 / 100</li>
+            <li><strong>＋</strong>：增项金额 = 数值（固定金额）</li>
+          </ul>
+
+          <h3>节点</h3>
+          <p>按比例拆分。算法固定为 ×：</p>
+          <span class="um-formula">节点金额 = 单稿件原价（单元）× 节点比例% × 数量 × 用途比例</span>
+          <p>一个稿件的所有节点比例合计必须 = 100%。</p>
+
+          <h3>增项与节点共存</h3>
+          <ol>
+            <li>先算<strong>增项合计</strong></li>
+            <li><strong>单元原价 = 基础价 + 增项合计</strong></li>
+            <li>节点按"单元原价 × 比例"算</li>
+          </ol>
+          <p>小票上：增项前缀 <code>└</code>，节点前缀 <code>◆</code>。</p>
+        `
+      },
+      {
+        title: '四、组附加（3 选 1）',
+        html: `
+          <p>在「算法」弹窗里选一种：</p>
+          <ul>
+            <li><strong>组原价 × 系数</strong>：附加 = 组原价 × 数值%</li>
+            <li><strong>组小计 × 系数</strong>：附加 = 组小计 × 数值%（老算法默认）</li>
+            <li><strong>固定金额</strong>：附加 = 数值</li>
+          </ul>
+          <p>示例：基础价 100 × 2 件、商用 ×2 权限</p>
+          <ul>
+            <li>组原价 = 100 × 2 = 200</li>
+            <li>组小计 = 200 × 2 = 400</li>
+          </ul>
+          <p>如果组附加设 10%：</p>
+          <ul>
+            <li>组原价 × 系数 → 附加 = 20</li>
+            <li>组小计 × 系数 → 附加 = 40</li>
+            <li>固定金额 30 → 附加 = 30</li>
+          </ul>
+        `
+      },
+      {
+        title: '五、组折扣（5 选 1）',
+        html: `
+          <ul>
+            <li><strong>组原价 × 系数</strong></li>
+            <li><strong>组小计 × 系数</strong></li>
+            <li><strong>（组原价 + 组附加）× 系数</strong></li>
+            <li><strong>（组小计 + 组附加）× 系数</strong>（老算法默认）</li>
+            <li><strong>固定金额</strong></li>
+          </ul>
+          <p>示例同上，组附加采用"组小计 × 系数" = 40：</p>
+          <ul>
+            <li>组原价 × 10% → 折扣 = 20</li>
+            <li>组小计 × 10% → 折扣 = 40</li>
+            <li>(组原价 + 组附加) × 10% → (200 + 40) × 10% = 24</li>
+            <li>(组小计 + 组附加) × 10% → (400 + 40) × 10% = 44</li>
+            <li>固定 50 → 折扣 = 50</li>
+          </ul>
+          <span class="um-formula">组合计 = 组小计 + 组附加 − 组折扣</span>
+        `
+      },
+      {
+        title: '六、总附加（4 选 1）',
+        html: `
+          <p>基数换成了"所有组"的合计：</p>
+          <ul>
+            <li><strong>各组原价之和 × 系数</strong></li>
+            <li><strong>各组小计之和 × 系数</strong></li>
+            <li><strong>各组合计之和 × 系数</strong>（老算法默认）</li>
+            <li><strong>固定金额</strong></li>
+          </ul>
+          <p>示例：有 2 个组</p>
+          <ul>
+            <li>组 A：组原价 200，组小计 400，组合计 360</li>
+            <li>组 B：组原价 300，组小计 500，组合计 450</li>
+          </ul>
+          <p>那么：</p>
+          <ul>
+            <li>各组原价之和 = 500</li>
+            <li>各组小计之和 = 900</li>
+            <li>各组合计之和 = 810</li>
+          </ul>
+          <p>总附加设 10%：</p>
+          <ul>
+            <li>各组原价 × 10% → 50</li>
+            <li>各组小计 × 10% → 90</li>
+            <li>各组合计 × 10% → 81</li>
+          </ul>
+        `
+      },
+      {
+        title: '七、总折扣（7 选 1）',
+        html: `
+          <ul>
+            <li><strong>各组原价之和 × 系数</strong></li>
+            <li><strong>各组小计之和 × 系数</strong></li>
+            <li><strong>各组合计之和 × 系数</strong>（老算法默认）</li>
+            <li><strong>（各组原价之和 + 总附加）× 系数</strong></li>
+            <li><strong>（各组小计之和 + 总附加）× 系数</strong></li>
+            <li><strong>（各组合计之和 + 总附加）× 系数</strong></li>
+            <li><strong>固定金额</strong></li>
+          </ul>
+          <p>后三种相当于"先加后折"——先把总附加加上去，再对总数打折。</p>
+        `
+      },
+      {
+        title: '八、订单总价',
+        html: `
+          <span class="um-formula">订单总价 = 各稿件组合计之和 + 总附加 − 总折扣</span>
+          <p>订单总价<strong>不含服务费</strong>。服务费单列，加到应付上。</p>
+        `
+      },
+      {
+        title: '九、服务费',
+        html: `
+          <p>服务费是<strong>平台收的</strong>，不算用户实收。</p>
+          <span class="um-formula">应付金额（买家付）= 订单总价 + 服务费
+待结尾款（用户收）= 订单总价 − 预付款</span>
+          <p>详细规则（画加 / 米画师 / 咸鱼）见「服务费」章节。</p>
+        `
+      },
+      {
+        title: '十、预付款',
+        html: `
+          <p>按订单类型自动算：</p>
+          <ul>
+            <li><strong>占位单</strong>：预付款 = 排单费</li>
+            <li><strong>纯节点单</strong>（所有稿件都用节点计价）：预付款 = 每个稿件的第一个节点金额之和</li>
+            <li><strong>普通单</strong>：
+              <ul>
+                <li>定金百分比：预付款 = 应付金额 × 定金%</li>
+                <li>定金固定：预付款 = 数值</li>
+              </ul>
+            </li>
+          </ul>
+          <p>在"预付金额"弹窗里可以：</p>
+          <ul>
+            <li>切换<strong>有 / 无预付款</strong></li>
+            <li>看到系统计算的<strong>过程和结果</strong></li>
+            <li><strong>手动修改</strong>最终金额（一切以用户输入为准）</li>
+          </ul>
+        `
+      },
+      {
+        title: '十一、尾款与结单',
+        html: `
+          <span class="um-formula">尾款 = 应付金额 − 预付款</span>
+          <p>结单时可以：</p>
+          <ul>
+            <li>给尾款打折（按总应收比例 / 按尾款比例 / 具体金额）</li>
+            <li>在"核对实收"里<strong>再次确认</strong>预付款、尾款、实收合计</li>
+          </ul>
+          <p>结单后生成"结单小票"：显示"实付金额（不含服务费）"，不再显示应付 / 预付 / 待结。</p>
+        `
+      },
+      {
+        title: '十二、统计',
+        html: `
+          <h3>实收</h3>
+          <p>所有非退款、非支出的流水之和。包含预付款、尾款、跑单费、废稿费、记账收入。</p>
+
+          <h3>待结</h3>
+          <p>未结清订单的尾款之和。标记为"待结"的订单统计 pendingAmount；未完成的订单统计原尾款。</p>
+
+          <h3>结余</h3>
+          <span class="um-formula">结余 = 实收 − 退款 − 支出</span>
+
+          <p><strong>服务费不计入任何一项</strong>（那是平台的钱）。</p>
+        `
+      },
+      {
+        title: '十三、单主累计消费',
+        html: `
+          <p>单主卡片上显示的"累计消费"按<strong>流水</strong>汇总：</p>
+          <ul>
+            <li>该单主关联的非退款、非支出流水：+ 金额</li>
+            <li>退款类型流水：− 金额</li>
+          </ul>
+          <p>服务费不参与（用户没拿到这笔钱）。</p>
+        `
+      }
+    ]
+  },
+      {
+    id: 'serviceFee',
+    title: '服务费',
+    items: [
+      {
+        title: '一、服务费是什么',
+        html: `
+          <p>服务费是<strong>平台收的钱</strong>，不是用户的收入。</p>
+          <span class="um-formula">买家应付 = 订单总价 + 服务费
+用户实收 = 订单总价
+待结尾款 = 订单总价 − 预付款</span>
+          <p>服务费<strong>不计入</strong>用户的实收统计、待结、单主累计消费。</p>
+        `
+      },
+      {
+        title: '二、组服务费 vs 总服务费',
+        html: `
+          <p>两个功能相似，但基数不同：</p>
+
+          <h3>组服务费</h3>
+          <ul>
+            <li>位置：每个稿件组"添加稿件"按钮下方</li>
+            <li>基数：该组的<strong>组合计</strong></li>
+            <li>适合：一组走线上留档、另一组线下补款的场景</li>
+          </ul>
+
+          <h3>总服务费</h3>
+          <ul>
+            <li>位置："其他"面板里"预付金额"按钮右边</li>
+            <li>基数：整个订单的<strong>订单总价</strong></li>
+            <li>适合：整单走一个平台的场景</li>
+          </ul>
+        `
+      },
+      {
+        title: '三、组 / 总 二选一',
+        html: `
+          <p><strong>组服务费和总服务费不能同时存在。</strong></p>
+          <p>因为一个订单只会走一个平台，不需要算两次手续费。</p>
+
+          <h3>互斥规则</h3>
+          <ul>
+            <li>已经设了<strong>组服务费</strong> → 点"总服务费"会弹提示，让你先清除组服务费</li>
+            <li>已经设了<strong>总服务费</strong> → 点"组服务费"会弹提示，让你先清除总服务费</li>
+          </ul>
+
+          <h3>怎么清除</h3>
+          <p>打开那个服务费弹窗 → 点标题右边的<strong>「清除」</strong>按钮 → 服务费被清空。</p>
+        `
+      },
+      {
+        title: '四、画加',
+        html: `
+          <h3>基本规则</h3>
+          <ul>
+            <li>金额 ≤ 500 元：服务费 = 金额 × 5%</li>
+            <li>金额 > 500 元：
+              <ul>
+                <li>服务费 = 500 × 5% = 25 元</li>
+                <li>通道费 = (金额 − 500) × 1%</li>
+              </ul>
+            </li>
+          </ul>
+          <p>结果保留两位小数。</p>
+
+          <h3>真爱永恒特权卡</h3>
+          <p>可选 Lv1 / Lv2 / Lv3，只给"服务费"打折，<strong>通道费不打折</strong>：</p>
+          <ul>
+            <li>Lv1：服务费 × 0.9（九折）</li>
+            <li>Lv2：服务费 × 0.8（八折）</li>
+            <li>Lv3：服务费 × 0.7（七折）</li>
+          </ul>
+
+          <h3>示例</h3>
+          <p>组合计 600 元、真爱卡 Lv2：</p>
+          <ul>
+            <li>服务费 = 25 × 0.8 = 20 元</li>
+            <li>通道费 = (600 − 500) × 1% = 1 元</li>
+            <li>合计收取 = 21 元</li>
+          </ul>
+        `
+      },
+      {
+        title: '五、米画师',
+        html: `
+          <h3>两种模式</h3>
+          <ul>
+            <li><strong>橱窗</strong>：用户设"实际报价"（= 单主实付），服务费从报价里扣，剩下的就是用户实收。</li>
+            <li><strong>邀请</strong>：用户设"期望稿酬"（= 用户实收），服务费加在稿酬上，就是单主应付。</li>
+          </ul>
+
+          <h3>服务费算法</h3>
+          <span class="um-formula">服务费 = 基数 × 5%（向下取整）</span>
+          <p>基数就是"实际报价"或"期望稿酬"。</p>
+
+          <h3>示例</h3>
+          <p>假设基数 60 元：</p>
+          <ul>
+            <li>服务费 = floor(60 × 5%) = floor(3) = 3 元</li>
+            <li><strong>橱窗</strong>：报价 60，用户实收 = 60 − 3 = 57 元</li>
+            <li><strong>邀请</strong>：稿酬 60，单主应付 = 60 + 3 = 63 元</li>
+          </ul>
+          <p>两种模式的"基数"默认都自动填组合计（或订单总价），可手动改。</p>
+        `
+      },
+      {
+        title: '六、咸鱼',
+        html: `
+          <p>最简单：</p>
+          <span class="um-formula">服务费 = 基数 × 6%</span>
+          <p>没有通道费，没有会员折扣。结果保留两位小数。</p>
+        `
+      },
+      {
+        title: '七、在小票上的显示',
+        html: `
+          <p>服务费统一显示在<strong>订单总价下方</strong>，灰色小字，左对齐：</p>
+
+          <span class="um-formula">订单总价            ¥523.00
+  服务费（画加）       ¥25.00      ← 灰色小字
+  通道费（画加）       ¥1.00       ← 灰色小字（如果有）
+应付金额            ¥549.00</span>
+
+          <p><strong>注意</strong>：</p>
+          <ul>
+            <li>服务费<strong>不再显示在每个组的组合计下方</strong>了，统一挪到订单总价下方</li>
+            <li>没有服务费 → 这两行都不显示</li>
+            <li>通道费只有画加 > 500 时才有</li>
+            <li>组服务费和总服务费显示方式完全一样（因为本来就不会同时存在）</li>
+          </ul>
+        `
+      },
+      {
+        title: '八、结单小票上的服务费',
+        html: `
+          <p>结单小票上会显示：</p>
+          <ul>
+            <li>服务费（如有）</li>
+            <li>通道费（如有）</li>
+            <li>实付金额（不含服务费）</li>
+          </ul>
+          <p>因为服务费是平台收的，跟用户的实收无关，所以"实付金额"特别标注"不含服务费"。</p>
+        `
+      }
+    ]
+  },
       {
     id: 'pricelist',
     title: '价目表',
@@ -16616,85 +19745,105 @@ var USER_MANUAL_MODULES = [
       }
     ]
   },
-  {
+    {
     id: 'tags',
     title: '标签与筛选',
     items: [
       {
         title: '一、给订单加标签',
         html: `
-          <p>打开小票页，「企划信息」标题右边有一个黑色圆角的<strong>「标签」按钮</strong>。</p>
-          <p>点它打开标签弹窗，可以：</p>
+          <p>打开小票页，「企划信息」标题右边有「标签」按钮。</p>
           <ul>
-            <li>从<strong>历史标签</strong>里点击选择（点一下直接加）</li>
-            <li>或者在下方的输入框里<strong>输入新标签</strong></li>
+            <li>从历史标签里点击选择（点一下直接加）</li>
+            <li>或输入新标签名</li>
             <li>选颜色（红 / 黄 / 蓝 / 黑 / 灰）</li>
-            <li>点标签上的 × 可以删除单个标签</li>
+            <li>点标签上的 × 删除单个</li>
             <li>左下角「清空全部」清掉所有已选</li>
           </ul>
-          <p>每个订单最多 5 个标签。有标签时按钮会变蓝，后面显示数量。</p>
-          <p>点「保存」后，标签会跟着订单一起被导入。</p>
+          <p>每个订单最多 5 个标签。有标签时按钮变蓝，显示数量。</p>
         `
       },
       {
         title: '二、修改已有订单的标签',
         html: `
-          <p>打开订单详情页，点右上角<strong>「编辑」</strong>按钮。</p>
-          <p>「联系方式」那一行的<strong>右边</strong>会出现当前标签，还有一个「+ 标签」或「编辑」按钮。</p>
+          <p>订单详情页右上角「编辑」按钮，联系方式那一行的右边会出现当前标签和「+ 标签」/「编辑」按钮。</p>
           <p>点它打开同一个弹窗，可以加、删、改标签。</p>
-          <p>非编辑状态下只显示标签，不能点。</p>
         `
       },
       {
         title: '三、标签颜色',
         html: `
-          <p>5 种颜色，文字统一白色：</p>
+          <p>5 种颜色：</p>
           <ul>
-            <li><strong>红色</strong>：适合"加急"、"催"</li>
-            <li><strong>黄色</strong>：适合"重要"</li>
-            <li><strong>蓝色</strong>：适合"企划"、"系列"</li>
-            <li><strong>黑色</strong>：适合"黑名单"、"危险"</li>
-            <li><strong>灰色</strong>：适合"老客户"、"普通"</li>
+            <li><strong>红色</strong>：加急 / 催</li>
+            <li><strong>黄色</strong>：重要</li>
+            <li><strong>蓝色</strong>：企划 / 系列</li>
+            <li><strong>黑色</strong>：黑名单 / 危险</li>
+            <li><strong>灰色</strong>：老客户 / 普通</li>
           </ul>
-          <p>颜色跟名字绑定：比如第一次"加急"选了红色，以后选"加急"会自动红色。</p>
+          <p>颜色跟名字绑定：第一次"加急"选红，以后"加急"自动红。</p>
         `
       },
       {
-        title: '四、订单列表上的标签',
+        title: '四、列表上的标签',
         html: `
-          <p>所有订单卡片（待办 / 已结 / 已撤 / 已废）都会显示标签。</p>
-          <p>每张卡<strong>最多显示 3 个</strong>标签，超出会用 <code>+N</code> 折叠。</p>
-          <p>标签显示在订单标题下面、进度信息上面。</p>
+          <p>所有订单卡片（待办 / 已结 / 已撤 / 已废）都显示标签。</p>
+          <p>每张卡最多显示 3 个，超出用 <code>+N</code> 折叠。</p>
         `
       },
       {
-        title: '五、筛选订单',
+        title: '五、订单筛选',
         html: `
-          <p>打开「订单 → 待」页，<strong>右上角有个「筛选」按钮</strong>。</p>
-          <p>点开弹窗，可以设置三组条件（都是可选的）：</p>
+          <p>订单页右上角「筛选」按钮，可以设置：</p>
           <ul>
-            <li><strong>接单时间范围</strong>：全部 / 本月 / 本年 / 自定义</li>
-            <li><strong>标签</strong>：从历史标签里多选，<strong>命中任意一个</strong>就符合</li>
-            <li><strong>状态</strong>：未完成 / 待开单 / 待结 / 已结单 / 已撤单 / 已废稿（多选）</li>
+            <li><strong>接单时间</strong>：全部 / 本月 / 本年 / 自定义</li>
+            <li><strong>标签</strong>：多选</li>
+            <li><strong>IP</strong>：单选（从历史订单自动收集）</li>
+            <li><strong>属性</strong>：单选（从历史订单自动收集）</li>
+            <li><strong>状态</strong>：多选</li>
           </ul>
-          <p>点「确定」，跳到<strong>筛选结果页</strong>，显示所有符合条件的订单——不分待/结/撤/废，混在一起，按接单日期倒序。</p>
-          <p>点卡片可以直接进对应详情页。</p>
+          <p>点确定后跳到"筛选结果页"，显示所有符合条件的订单（不分待 / 结 / 撤 / 废）。</p>
+          <p>筛选结果页也可以进入管理批量删除。</p>
         `
       },
       {
         title: '六、筛选条件说明',
         html: `
-          <p>三组条件都是「<strong>与</strong>」的关系：</p>
+          <p>不同组条件是"<strong>与</strong>"关系（时间 + 标签 + IP + 属性 + 状态必须同时满足）。</p>
+          <p>同一组内（多标签、多状态）是"<strong>或</strong>"关系。</p>
+          <p>IP 和属性各自只能选一个，点了想取消再点一次。</p>
+          <p>不选任何条件时显示全部。点"清空条件"一键重置。</p>
+        `
+      },
+      {
+        title: '七、票夹筛选',
+        html: `
+          <p>票夹的筛选按钮，跟订单筛选类似：</p>
           <ul>
-            <li>时间 + 标签 + 状态必须同时满足</li>
+            <li>时间范围</li>
+            <li>单主 ID</li>
+            <li>标签</li>
+            <li>IP</li>
+            <li>属性</li>
           </ul>
-          <p>同一组内部（比如多个标签、多个状态）是「<strong>或</strong>」的关系：</p>
+          <p>筛选后只显示符合条件的小票。</p>
+        `
+      },
+      {
+        title: '八、票夹批量管理',
+        html: `
+          <p>票夹右上角「管理」按钮进入多选模式：</p>
           <ul>
-            <li>选「加急 + 立绘」→ 有加急<strong>或</strong>立绘的订单都显示</li>
-            <li>选「未完成 + 待结」→ 未完成<strong>或</strong>待结的订单都显示</li>
+            <li>点缩略图勾选 / 取消（不是放大）</li>
+            <li>全选、删除、完成</li>
           </ul>
-          <p>不选任何条件时，显示全部订单。</p>
-          <p>点弹窗左下角「清空条件」可以一键重置。</p>
+          <p><strong>注意</strong>：票夹里的删除只删图片。<strong>订单、结单记录、流水、统计数字全部不动。</strong></p>
+          <p>删除后：</p>
+          <ul>
+            <li>票夹里看不到这张小票了</li>
+            <li>打开对应订单详情，也不显示小票图了</li>
+            <li>但订单本身、金额、统计全部保留</li>
+          </ul>
         `
       }
     ]
@@ -16703,24 +19852,54 @@ var USER_MANUAL_MODULES = [
 
 var __umCurrentModuleId = '';
 
+/* 用户手册模块显示顺序 */
+var UM_MODULE_ORDER = [
+  'quickstart',
+  'receipt',
+  'serviceFee',
+  'algorithm',
+  'order',
+  'stats',
+  'master',
+  'data',
+  'faq',
+  'pricelist',
+  'tags'
+];
+
+function getOrderedUserManualModules() {
+  const ordered = [];
+  UM_MODULE_ORDER.forEach(id => {
+    const m = USER_MANUAL_MODULES.find(x => x.id === id);
+    if (m) ordered.push(m);
+  });
+  /* 兜底：不在顺序表里的模块追加到末尾 */
+  USER_MANUAL_MODULES.forEach(m => {
+    if (ordered.indexOf(m) < 0) ordered.push(m);
+  });
+  return ordered;
+}
+
 function renderUserManual() {
   const navBox = $('umNav');
   const contentBox = $('umContent');
   if (!navBox || !contentBox) return;
 
+  const modules = getOrderedUserManualModules();
+
   /* 首次进入：默认选中第一个模块 */
-  if (!__umCurrentModuleId || !USER_MANUAL_MODULES.find(m => m.id === __umCurrentModuleId)) {
-    __umCurrentModuleId = USER_MANUAL_MODULES[0].id;
+  if (!__umCurrentModuleId || !modules.find(m => m.id === __umCurrentModuleId)) {
+    __umCurrentModuleId = modules[0].id;
   }
 
   /* 顶部导航 */
-  navBox.innerHTML = USER_MANUAL_MODULES.map(m => {
+  navBox.innerHTML = modules.map(m => {
     const cls = 'um-nav-btn' + (m.id === __umCurrentModuleId ? ' active' : '');
     return `<button type="button" class="${cls}" onclick="selectUserManualModule('${escapeAttr(m.id)}')">${escapeHtml(m.title)}</button>`;
   }).join('');
 
   /* 内容区：当前模块的条目列表 */
-  const module = USER_MANUAL_MODULES.find(m => m.id === __umCurrentModuleId);
+  const module = modules.find(m => m.id === __umCurrentModuleId);
   if (!module || !module.items || !module.items.length) {
     contentBox.innerHTML = `
       <div class="um-empty">
@@ -16893,6 +20072,23 @@ const ANNOUNCEMENTS = {
         <li>导入的本地字体现在会保存在浏览器中，刷新页面后无需重新导入。</li>
         <li>优化字体导入提示，明确本地字体受版权与容量限制，仅限当前设备浏览器使用。</li>
         <li>调整「小票设置」布局，字体相关设置移至「基础」标签页，操作更顺手。</li>
+      </ul>
+      <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
+    `,
+  },
+  '1.1.4': {
+    title: '算法自由搭配 · 服务费上线',
+    html: `
+      <ul style="padding-left:20px;line-height:1.85;">
+        <li><strong>算法可自定义</strong>：小票页新增「算法」按钮，组附加、组折扣、总附加、总折扣自由搭配。</li>
+        <li><strong>平台服务费</strong>：新增服务费，预设画加、米画师、咸鱼，支持真爱卡和通道费。</li>
+        <li><strong>小票可简洁</strong>：小票设置里新增「内容」页，一键智能简洁，也可手动勾选显示哪些金额行。</li>
+        <li><strong>画师 / 美工 ID</strong>：小票页可自定义当前订单的画师或美工 ID，不同平台可用不同 ID。</li>
+        <li><strong>结单小票</strong>：结单时可核对实收，一键生成结单小票并保存到相册。</li>
+        <li><strong>票夹升级</strong>：支持筛选 + 批量管理，可按 IP、属性、标签筛选。</li>
+        <li><strong>新增 IP 字段</strong>：小票可填 IP，订单和票夹筛选支持 IP + 属性。</li>
+        <li><strong>数据修复增强</strong>：修复事项 ID 冲突、为老订单补编号并重新生成小票。</li>
+        <li><strong>细节优化</strong>：定金开关、预付金额自定义、撤单 / 废稿不再存图片。</li>
       </ul>
       <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
     `,
@@ -20944,10 +24140,15 @@ async function initStorageOnStartup() {
   const def = getDefaultIdentity();
   if ($('setIdentity')) $('setIdentity').value = def;
 
-  /* ★ 从 localStorage 恢复署名 ID（修复 bug #1） */
+  /* 从 localStorage 恢复署名 ID */
   if ($('setName')) $('setName').value = getSavedArtistName();
 
   syncMainFromSettings();
+
+  /* ★ 新增：初始化小票页的"画师/美工"下拉框和 ID 输入框 */
+  renderArtistIdentitySelect();
+  if ($('artistIdentity')) $('artistIdentity').value = getDefaultIdentity();
+  if ($('artistId'))       $('artistId').value       = getSavedArtistName();
 })();
 
 /* --- 权限：渲染列表 + 同步到主页 --- */
@@ -21140,6 +24341,19 @@ function finalizeFontDot() {
 
   /* 8. 小票页标签按钮初始状态 */
   updateReceiptTagBtn();
+
+  /* 8.5 定金开关 / 预付 / 总服务费 初始化 */
+  (function initFeeModule() {
+    const platSel = $('platform');
+    if (platSel && !platSel.__depositBound) {
+      platSel.__depositBound = true;
+      platSel.addEventListener('change', autoUpdateDepositByPlatform);
+    }
+    autoUpdateDepositByPlatform();
+    updateDepositInputDisabled();
+    updatePrepaidBtnState();
+    updateOrderServiceBtnState();
+  })();
 
   /* 9. 更新公告（迁移完成后再弹，400ms 让页面先稳定） */
   const pending = getPendingAnnouncement();

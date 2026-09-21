@@ -8067,3 +8067,1170 @@ body.is-preset-dragging {
   color: var(--ink);
   font-weight: 700;
 }
+/* ═══════════════════════════════════════════════════════
+   [CSS-36] 算法设置按钮 + 算法设置弹窗
+   ═══════════════════════════════════════════════════════ */
+
+/* ---------- 一、「算法」按钮（定制细则标题旁边） ---------- */
+.algo-btn-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  height: 24px;
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  background: var(--ink, #111111);
+  color: #ffffff;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s, transform 0.1s;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.algo-btn-inline:hover { opacity: 0.85; }
+.algo-btn-inline:active { transform: scale(0.96); }
+
+/* ---------- 二、算法设置弹窗 ---------- */
+.algo-modal {
+  max-width: 560px;
+  max-height: 85vh;
+}
+.algo-modal .modal-body {
+  padding: 10px 20px 22px;
+}
+
+.algo-intro {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  line-height: 1.75;
+  margin: 4px 0 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px dashed var(--line-soft);
+}
+.algo-help-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
+  margin: 0 2px;
+}
+
+/* 每组 */
+.algo-section { margin-bottom: 22px; }
+.algo-section:last-of-type { margin-bottom: 4px; }
+
+.algo-section-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 0 0 8px;
+  margin: 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+/* 选项列表 */
+.algo-radio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ---------- 三、单个选项行（整行可点） ---------- */
+.algo-radio-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 14px;
+  margin: 0;
+  background: #fbfcfd;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+
+  /* 覆盖全局 label 样式 */
+  font-size: 13.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  line-height: 1.4;
+}
+.algo-radio-row:hover {
+  border-color: var(--line);
+  background: #f4f6f9;
+}
+
+/* 隐藏原生 radio */
+.algo-radio-row input[type="radio"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+
+/* 用 ::before 画自定义圆点（未选中：空心灰圈） */
+.algo-radio-row::before {
+  content: '';
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  background: #ffffff;
+  box-sizing: border-box;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+/* 选中态：实心圆 + 内白点 + 高亮边框 */
+.algo-radio-row:has(input:checked) {
+  border-color: var(--ink);
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+.algo-radio-row:has(input:checked)::before {
+  border-color: var(--ink);
+  background: var(--ink);
+  box-shadow: inset 0 0 0 3px var(--paper, #ffffff);
+}
+
+/* 兼容不支持 :has() 的老浏览器（iOS 15.3 及以下）：
+   至少让文字加粗提示选中 */
+.algo-radio-row input:checked ~ .algo-radio-label {
+  font-weight: 700;
+}
+
+.algo-radio-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+/* ---------- 四、ⓘ 说明按钮 ---------- */
+.algo-help-btn {
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  color: var(--ink-soft);
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  transition: color 0.15s, background 0.15s, transform 0.1s;
+  -webkit-tap-highlight-color: transparent;
+}
+.algo-help-btn:hover {
+  color: var(--ink);
+  background: #eef1f4;
+}
+.algo-help-btn:active { transform: scale(0.94); }
+.algo-help-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  pointer-events: none;
+}
+
+/* ---------- 五、说明弹窗里的两块内容 ---------- */
+.algo-help-block {
+  margin-bottom: 16px;
+}
+.algo-help-block:last-of-type { margin-bottom: 4px; }
+
+.algo-help-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--ink-soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.algo-help-text {
+  font-size: 13.5px;
+  color: var(--ink);
+  line-height: 1.75;
+  background: #f7f8fa;
+  border-left: 3px solid var(--line);
+  padding: 10px 14px;
+  border-radius: 0 6px 6px 0;
+  word-break: break-word;
+}
+
+/* ---------- 六、响应式（手机） ---------- */
+@media (max-width: 767px) {
+  .algo-btn-inline {
+    padding: 3px 10px;
+    height: 22px;
+    font-size: 11px;
+  }
+  .algo-modal .modal-body {
+    padding: 8px 16px 20px;
+  }
+  .algo-intro { font-size: 12px; margin-bottom: 14px; padding-bottom: 10px; }
+  .algo-section { margin-bottom: 18px; }
+  .algo-section-title { font-size: 11.5px; padding-bottom: 6px; }
+  .algo-radio-list { gap: 6px; margin-top: 10px; }
+  .algo-radio-row {
+    padding: 11px 12px;
+    gap: 10px;
+    font-size: 13px;
+    border-radius: 6px;
+  }
+  .algo-radio-row::before {
+    flex: 0 0 16px;
+    width: 16px;
+    height: 16px;
+  }
+  .algo-help-btn { flex: 0 0 22px; width: 22px; height: 22px; }
+  .algo-help-btn svg { width: 16px; height: 16px; }
+}
+
+/* ---------- 七、主题适配 ---------- */
+:root[data-theme="cute-ins"] .algo-btn-inline {
+  background: var(--theme-primary, #a2d9f0);
+}
+:root[data-theme="cute-ins"] .algo-radio-row {
+  border-radius: 14px;
+}
+:root[data-theme="cute-ins"] .algo-radio-row:has(input:checked) {
+  border-color: var(--theme-primary, #a2d9f0);
+  background: var(--theme-primary-soft, #eaf5fa);
+}
+:root[data-theme="cute-ins"] .algo-radio-row:has(input:checked)::before {
+  border-color: var(--theme-primary-deep, #6db8d6);
+  background: var(--theme-primary-deep, #6db8d6);
+}
+:root[data-theme="cute-ins"] .algo-help-text {
+  background: var(--theme-primary-soft, #eaf5fa);
+  border-left-color: var(--theme-primary, #a2d9f0);
+  border-radius: 0 12px 12px 0;
+}
+
+:root[data-theme="guava"] .algo-btn-inline {
+  background: var(--p, #f0b8c8);
+}
+:root[data-theme="guava"] .algo-radio-row {
+  border-radius: 14px;
+}
+:root[data-theme="guava"] .algo-radio-row:has(input:checked) {
+  border-color: var(--p, #f0b8c8);
+  background: var(--p-soft, #fdeef3);
+}
+:root[data-theme="guava"] .algo-radio-row:has(input:checked)::before {
+  border-color: var(--p-deep, #d1809c);
+  background: var(--p-deep, #d1809c);
+}
+:root[data-theme="guava"] .algo-help-text {
+  background: var(--p-soft, #fdeef3);
+  border-left-color: var(--p, #f0b8c8);
+  border-radius: 0 12px 12px 0;
+}
+
+:root[data-theme="zhuxi"] .algo-btn-inline {
+  background: var(--zx-red, #b8210b);
+  border-radius: 6px;
+}
+:root[data-theme="zhuxi"] .algo-radio-row {
+  border-radius: 6px;
+}
+:root[data-theme="zhuxi"] .algo-radio-row:has(input:checked) {
+  border-color: var(--zx-red, #b8210b);
+  background: var(--zx-red-soft, #fae4e0);
+}
+:root[data-theme="zhuxi"] .algo-radio-row:has(input:checked)::before {
+  border-color: var(--zx-red, #b8210b);
+  background: var(--zx-red, #b8210b);
+}
+:root[data-theme="zhuxi"] .algo-help-text {
+  background: var(--zx-blue-soft, #e8f1fc);
+  border-left-color: var(--zx-blue, #4293ee);
+  border-radius: 0 6px 6px 0;
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-37] 小票 · 订单级附加 / 折扣的公式灰字
+   ═══════════════════════════════════════════════════════ */
+
+.order-formula {
+  font-size: 0.85em;
+  color: var(--rc-ink-soft, #555555);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  margin-left: 2px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+@media (max-width: 767px) {
+  .order-formula {
+    font-size: 0.8em;
+  }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-38] 阶段 2 · 定金开关 / 预付按钮 / 服务费
+   ═══════════════════════════════════════════════════════ */
+
+/* ---------- 一、定金标签行（标签 + 开关并排） ---------- */
+.deposit-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+.deposit-label-row > label:first-child {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.deposit-label-row .switch-wrap { margin: 0; }
+
+/* ---------- 二、订单级「预付金额 / 总服务费」按钮行 ---------- */
+.order-fee-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.order-fee-btn {
+  flex: 1 1 140px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  background: #fbfcfd;
+  border: 1px dashed var(--line);
+  border-radius: 0;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.order-fee-btn:hover {
+  border-color: var(--ink);
+  background: #f4f6f9;
+}
+.order-fee-btn-label {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.order-fee-btn-state {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.order-fee-btn-state.is-on { color: #2b7fff; font-weight: 600; }
+.order-fee-btn-state.is-off { color: var(--ink-soft); }
+
+/* ---------- 三、组服务费按钮（跟"添加稿件"一样位置） ---------- */
+.group-service-btn {
+  margin-top: 0;
+}
+
+/* ---------- 四、组里已设服务费的展示（在组合计上方） ---------- */
+.group-service-display {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-soft);
+}
+.group-service-display .gs-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.group-service-display .gs-row .gs-name { flex: 1; min-width: 0; }
+.group-service-display .gs-row .gs-val {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.group-service-display .gs-row.gs-service {
+  color: #b8860b;
+}
+.group-service-display .gs-row.gs-service .gs-val {
+  color: #b8860b;
+  font-weight: 600;
+}
+
+/* ---------- 五、预付金额弹窗 ---------- */
+.prepaid-modal { max-width: 480px; }
+
+.prepaid-toggle-row {
+  display: flex;
+  gap: 10px;
+  margin: 6px 0 18px;
+}
+.prepaid-toggle-btn {
+  flex: 1 1 0;
+  padding: 12px 10px;
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  border-radius: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.prepaid-toggle-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.prepaid-toggle-btn.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+.prepaid-calc {
+  padding: 12px 14px;
+  background: #f7f8fa;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  margin-bottom: 4px;
+}
+.prepaid-calc-title {
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.prepaid-calc-formula {
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1.7;
+  word-break: break-word;
+}
+
+.prepaid-hint {
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  margin-top: 8px;
+  line-height: 1.6;
+}
+
+.prepaid-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  margin-top: 10px;
+  background: transparent;
+  border: 1px dashed var(--line);
+  border-radius: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.prepaid-reset-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* ---------- 六、服务费弹窗 ---------- */
+.fee-modal { max-width: 520px; }
+
+.fee-base-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: #f7f8fa;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+  margin-bottom: 16px;
+}
+.fee-base-label {
+  font-size: 12px;
+  color: var(--ink-soft);
+  letter-spacing: 0.06em;
+}
+.fee-base-value {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 平台按钮 */
+.fee-platform-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.fee-platform-btn {
+  flex: 1 1 0;
+  min-width: 76px;
+  padding: 11px 10px;
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  border-radius: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.fee-platform-btn:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.fee-platform-btn.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* 额外设置块 */
+.fee-extra-block { margin-bottom: 16px; }
+.fee-extra-block:last-of-type { margin-bottom: 0; }
+.fee-extra-block > label {
+  margin-top: 0;
+  margin-bottom: 8px;
+  display: block;
+}
+
+/* 真爱卡等级按钮 */
+.fee-vip-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.fee-vip-btn {
+  flex: 1 1 auto;
+  min-width: 70px;
+  padding: 9px 8px;
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  border-radius: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+}
+.fee-vip-btn:hover { border-color: var(--ink); color: var(--ink); }
+.fee-vip-btn.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* 米画师模式按钮 */
+.fee-mode-row {
+  display: flex;
+  gap: 8px;
+}
+.fee-mode-btn {
+  flex: 1 1 0;
+  padding: 10px;
+  background: transparent;
+  border: 1px solid var(--line-soft);
+  border-radius: 0;
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-size: 13.5px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: all 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.fee-mode-btn:hover { border-color: var(--ink); color: var(--ink); }
+.fee-mode-btn.active {
+  background: var(--ink);
+  color: #fff;
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* 计算过程块 */
+.fee-calc-block {
+  margin-top: 16px;
+  padding: 12px 14px;
+  background: #f7f8fa;
+  border: 1px solid var(--line-soft);
+  border-radius: 6px;
+}
+.fee-calc-title {
+  font-size: 11px;
+  color: var(--ink-soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.fee-calc-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.fee-calc-row .v { font-variant-numeric: tabular-nums; color: var(--ink); }
+.fee-calc-row > span:last-child {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  word-break: break-word;
+}
+.fee-calc-row.is-main {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line-soft);
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--ink);
+}
+.fee-calc-row.is-main > span:last-child { font-size: 15px; }
+
+.fee-empty-tip {
+  text-align: center;
+  padding: 20px 12px;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* ---------- 七、响应式（手机） ---------- */
+@media (max-width: 767px) {
+  .order-fee-row { gap: 8px; }
+  .order-fee-btn {
+    flex: 1 1 100%;
+    padding: 9px 12px;
+    font-size: 12.5px;
+  }
+  .order-fee-btn-state { font-size: 11px; }
+
+  .prepaid-toggle-btn { padding: 10px 8px; font-size: 13px; }
+  .prepaid-calc { padding: 10px 12px; }
+  .prepaid-calc-formula { font-size: 12.5px; }
+
+  .fee-base-row { padding: 8px 12px; margin-bottom: 14px; }
+  .fee-base-value { font-size: 15px; }
+
+  .fee-platform-row { gap: 6px; }
+  .fee-platform-btn { min-width: 64px; padding: 10px 6px; font-size: 13px; }
+
+  .fee-vip-row { gap: 5px; }
+  .fee-vip-btn { min-width: 60px; padding: 8px 6px; font-size: 11.5px; }
+
+  .fee-mode-btn { padding: 9px 6px; font-size: 13px; }
+
+  .fee-calc-block { padding: 10px 12px; }
+  .fee-calc-row { font-size: 12.5px; }
+  .fee-calc-row.is-main { font-size: 13.5px; }
+  .fee-calc-row.is-main > span:last-child { font-size: 14px; }
+}
+
+/* ---------- 八、主题适配 ---------- */
+:root[data-theme="cute-ins"] .order-fee-btn {
+  border-radius: 14px;
+  border-color: var(--theme-primary-light, #c8e8f4);
+  background: var(--theme-primary-soft, #eaf5fa);
+}
+:root[data-theme="cute-ins"] .order-fee-btn:hover {
+  border-color: var(--theme-primary, #a2d9f0);
+}
+:root[data-theme="cute-ins"] .prepaid-toggle-btn,
+:root[data-theme="cute-ins"] .fee-platform-btn,
+:root[data-theme="cute-ins"] .fee-vip-btn,
+:root[data-theme="cute-ins"] .fee-mode-btn {
+  border-radius: 999px;
+}
+:root[data-theme="cute-ins"] .prepaid-toggle-btn.active,
+:root[data-theme="cute-ins"] .fee-platform-btn.active,
+:root[data-theme="cute-ins"] .fee-vip-btn.active,
+:root[data-theme="cute-ins"] .fee-mode-btn.active {
+  background: var(--theme-primary, #a2d9f0);
+  border-color: var(--theme-primary, #a2d9f0);
+}
+:root[data-theme="cute-ins"] .prepaid-calc,
+:root[data-theme="cute-ins"] .fee-base-row,
+:root[data-theme="cute-ins"] .fee-calc-block {
+  border-radius: 12px;
+}
+:root[data-theme="cute-ins"] .group-service-display .gs-row.gs-service { color: var(--theme-primary-deep, #6db8d6); }
+:root[data-theme="cute-ins"] .group-service-display .gs-row.gs-service .gs-val { color: var(--theme-primary-deep, #6db8d6); }
+
+:root[data-theme="guava"] .order-fee-btn {
+  border-radius: 14px;
+  border-color: var(--p-light, #f8d6e0);
+  background: var(--p-soft, #fdeef3);
+}
+:root[data-theme="guava"] .order-fee-btn:hover {
+  border-color: var(--p, #f0b8c8);
+}
+:root[data-theme="guava"] .prepaid-toggle-btn,
+:root[data-theme="guava"] .fee-platform-btn,
+:root[data-theme="guava"] .fee-vip-btn,
+:root[data-theme="guava"] .fee-mode-btn {
+  border-radius: 999px;
+}
+:root[data-theme="guava"] .prepaid-toggle-btn.active,
+:root[data-theme="guava"] .fee-platform-btn.active,
+:root[data-theme="guava"] .fee-vip-btn.active,
+:root[data-theme="guava"] .fee-mode-btn.active {
+  background: var(--p, #f0b8c8);
+  border-color: var(--p, #f0b8c8);
+}
+:root[data-theme="guava"] .prepaid-calc,
+:root[data-theme="guava"] .fee-base-row,
+:root[data-theme="guava"] .fee-calc-block {
+  border-radius: 12px;
+}
+:root[data-theme="guava"] .group-service-display .gs-row.gs-service { color: var(--p-deep, #d1809c); }
+:root[data-theme="guava"] .group-service-display .gs-row.gs-service .gs-val { color: var(--p-deep, #d1809c); }
+
+:root[data-theme="zhuxi"] .order-fee-btn {
+  border-radius: 6px;
+  border-color: var(--zx-red-soft, #fae4e0);
+  background: #fafcff;
+}
+:root[data-theme="zhuxi"] .order-fee-btn:hover {
+  border-color: var(--zx-red, #b8210b);
+}
+:root[data-theme="zhuxi"] .prepaid-toggle-btn,
+:root[data-theme="zhuxi"] .fee-platform-btn,
+:root[data-theme="zhuxi"] .fee-vip-btn,
+:root[data-theme="zhuxi"] .fee-mode-btn {
+  border-radius: 6px;
+}
+:root[data-theme="zhuxi"] .prepaid-toggle-btn.active,
+:root[data-theme="zhuxi"] .fee-platform-btn.active,
+:root[data-theme="zhuxi"] .fee-vip-btn.active,
+:root[data-theme="zhuxi"] .fee-mode-btn.active {
+  background: var(--zx-red, #b8210b);
+  border-color: var(--zx-red, #b8210b);
+}
+:root[data-theme="zhuxi"] .prepaid-calc,
+:root[data-theme="zhuxi"] .fee-base-row,
+:root[data-theme="zhuxi"] .fee-calc-block {
+  border-radius: 6px;
+}
+:root[data-theme="zhuxi"] .group-service-display .gs-row.gs-service { color: var(--zx-red, #b8210b); }
+:root[data-theme="zhuxi"] .group-service-display .gs-row.gs-service .gs-val { color: var(--zx-red, #b8210b); }
+/* ═══════════════════════════════════════════════════════
+   [CSS-39] 小票 · 组服务费（与普通小字一致，无特殊高亮）
+   ═══════════════════════════════════════════════════════ */
+
+/* gs-service 类保留，方便以后区分，但样式跟普通行一样 */
+/* ═══════════════════════════════════════════════════════
+   [CSS-40] 订单编号显示
+   ═══════════════════════════════════════════════════════ */
+
+/* 订单卡片 · 标题后面的灰色小字 */
+.order-no-inline {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-soft);
+  letter-spacing: 0.02em;
+  margin-left: 2px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 订单详情页 · 标题下面的独立一行 */
+.order-no-line {
+  font-size: 12px;
+  color: var(--ink-soft);
+  letter-spacing: 0.04em;
+  margin-top: 3px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  word-break: break-all;
+}
+
+/* 响应式 */
+@media (max-width: 767px) {
+  .order-no-inline { font-size: 10.5px; }
+  .order-no-line { font-size: 11.5px; margin-top: 2px; }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-41] 结单确认实收 + 结单小票弹窗
+   ═══════════════════════════════════════════════════════ */
+
+.settle-final-modal { max-width: 520px; }
+
+.final-receipt-modal {
+  max-width: 560px;
+  max-height: 92vh;
+}
+.final-receipt-modal .modal-body {
+  padding: 14px 18px 20px;
+}
+
+@media (max-width: 767px) {
+  .final-receipt-modal { max-width: 100%; }
+  .final-receipt-modal .modal-body { padding: 10px 12px 16px; }
+  .final-receipt-modal img { max-height: 48vh !important; }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-42] 结单小票 · 弹窗内联 loading
+   ═══════════════════════════════════════════════════════ */
+
+/* 弹窗里的"正在生成/加载"区（不是全屏，就在弹窗内部） */
+.settle-inline-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 70px 20px;
+  min-height: 220px;
+}
+
+.settle-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid #e6e9ec;
+  border-top-color: #111111;
+  border-radius: 50%;
+  animation: settleSpin 0.75s linear infinite;
+  box-sizing: border-box;
+}
+
+@keyframes settleSpin {
+  to { transform: rotate(360deg); }
+}
+
+.settle-loading-text {
+  font-size: 14px;
+  color: #555555;
+  letter-spacing: 0.08em;
+  font-family: inherit;
+}
+
+/* 主题适配 */
+:root[data-theme="cute-ins"] .settle-loading-spinner { border-top-color: var(--theme-primary, #a2d9f0); }
+:root[data-theme="guava"]    .settle-loading-spinner { border-top-color: var(--p, #f0b8c8); }
+:root[data-theme="zhuxi"]    .settle-loading-spinner { border-top-color: var(--zx-red, #b8210b); }
+
+@media (max-width: 767px) {
+  .settle-inline-loading { padding: 50px 20px; min-height: 180px; gap: 16px; }
+  .settle-loading-spinner { width: 34px; height: 34px; border-width: 3px; }
+  .settle-loading-text { font-size: 13px; }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-43] 票夹 · 筛选 + 管理模式
+   ═══════════════════════════════════════════════════════ */
+
+/* 缩略图上的勾选圈 */
+.ticket-select-circle {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+  -webkit-tap-highlight-color: transparent;
+}
+.ticket-select-circle svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  color: #555555;
+  transition: color 0.15s;
+}
+.ticket-folder-thumb.is-selected {
+  border-color: #2b7fff;
+  box-shadow: 0 0 0 2px #2b7fff;
+}
+.ticket-folder-thumb.is-selected .ticket-select-circle svg {
+  color: #2b7fff;
+}
+
+/* 管理模式下，缩略图不显示放大光标 */
+.ticket-folder-thumb.is-manage {
+  cursor: pointer;
+}
+
+/* 手机 */
+@media (max-width: 767px) {
+  .ticket-select-circle {
+    top: 5px;
+    left: 5px;
+    width: 22px;
+    height: 22px;
+  }
+  .ticket-select-circle svg { width: 15px; height: 15px; }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-44] 筛选弹窗 · IP / 属性（无颜色胶囊）
+   ═══════════════════════════════════════════════════════ */
+
+.tag-chip-plain {
+  background: #eef1f4 !important;
+  color: #333333 !important;
+  border: 1px solid var(--line-soft);
+  cursor: pointer;
+  opacity: 0.85;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+}
+.tag-chip-plain:hover {
+  background: #e4e8ec !important;
+  opacity: 1;
+  transform: translateY(-1px);
+}
+.tag-chip-plain.is-selected {
+  background: #2b7fff !important;
+  color: #ffffff !important;
+  border-color: #2b7fff;
+  opacity: 1;
+  font-weight: 600;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(43, 127, 255, 0.35);
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-46] 小票页 · 画师 / 美工 行
+   ═══════════════════════════════════════════════════════ */
+
+.artist-id-wrap {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.artist-id-wrap > select.artist-identity-select {
+  flex: 0 0 90px;
+  min-width: 0;
+  padding: 6px 20px 6px 4px;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+  color: var(--ink);
+  background-position: right 2px center;
+}
+
+.artist-id-wrap > input.artist-id-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  .artist-id-wrap > select.artist-identity-select {
+    flex: 0 0 76px;
+    font-size: 13px;
+  }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-47] 小票 · 内容显示选项面板
+   ═══════════════════════════════════════════════════════ */
+
+/* 智能简洁按钮 */
+.rs-smart-btn {
+  display: block;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--ink);
+  color: #fff;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.rs-smart-btn:hover { opacity: 0.88; }
+.rs-smart-btn:active { transform: scale(0.98); }
+
+/* 勾选行 */
+.rs-check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin: 0 0 8px;
+  background: #fbfcfd;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13.5px;
+  color: var(--ink);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: border-color 0.15s, background 0.15s;
+
+  /* 覆盖全局 label 样式 */
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.rs-check-row:hover { border-color: var(--line); background: #f4f6f9; }
+
+.rs-check-row input[type="checkbox"] {
+  /* ★ 恢复被全局规则清掉的外观 */
+  -webkit-appearance: checkbox !important;
+  appearance: checkbox !important;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 18px;
+  border: none;
+  border-bottom: none;
+  background: transparent;
+  accent-color: var(--ink);
+  cursor: pointer;
+}
+
+.rs-check-row span {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 主题适配 */
+:root[data-theme="cute-ins"] .rs-smart-btn {
+  background: var(--theme-primary);
+  border-color: var(--theme-primary);
+  border-radius: 999px;
+}
+:root[data-theme="cute-ins"] .rs-check-row { border-radius: 14px; }
+:root[data-theme="cute-ins"] .rs-check-row input[type="checkbox"] { accent-color: var(--theme-primary-deep); }
+
+:root[data-theme="guava"] .rs-smart-btn {
+  background: var(--p);
+  border-color: var(--p);
+  border-radius: 999px;
+}
+:root[data-theme="guava"] .rs-check-row { border-radius: 14px; }
+:root[data-theme="guava"] .rs-check-row input[type="checkbox"] { accent-color: var(--p-deep); }
+
+:root[data-theme="zhuxi"] .rs-smart-btn {
+  background: var(--zx-red);
+  border-color: var(--zx-red);
+  border-radius: 6px;
+}
+:root[data-theme="zhuxi"] .rs-check-row { border-radius: 6px; }
+:root[data-theme="zhuxi"] .rs-check-row input[type="checkbox"] { accent-color: var(--zx-red); }
+
+@media (max-width: 767px) {
+  .rs-smart-btn { padding: 10px 14px; font-size: 13.5px; }
+  .rs-check-row { padding: 9px 10px; font-size: 13px; gap: 8px; }
+  .rs-check-row input[type="checkbox"] { width: 16px; height: 16px; flex: 0 0 16px; }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-48] 服务费弹窗 · 标题旁边的「清除」按钮
+   ═══════════════════════════════════════════════════════ */
+
+.fee-clear-btn {
+  flex: 0 0 auto;
+  padding: 7px 18px;
+  margin-right: 10px;
+  background: transparent;
+  color: var(--red);
+  border: 1px solid var(--red);
+  border-radius: 0;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.fee-clear-btn:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+@media (max-width: 767px) {
+  .fee-clear-btn {
+    padding: 6px 14px;
+    font-size: 12px;
+    margin-right: 8px;
+  }
+}
+/* ═══════════════════════════════════════════════════════
+   [CSS-49] 小票 · 服务费行（订单总价下方灰色小字）
+   ═══════════════════════════════════════════════════════ */
+
+.receipt .order-totals .row.order-fee-sub {
+  font-size: 0.85em;
+  color: var(--rc-ink-soft);
+  padding-left: 0;
+  letter-spacing: 0.02em;
+}
+.receipt .order-totals .row.order-fee-sub > span {
+  color: var(--rc-ink-soft);
+  font-weight: 400;
+}
+.receipt .order-totals .row.order-fee-sub > span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 767px) {
+  .receipt .order-totals .row.order-fee-sub {
+    font-size: 0.8em;
+    padding-left: 0.6em;
+  }
+}
