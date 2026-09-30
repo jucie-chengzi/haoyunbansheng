@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Supabase 数据隔离测试</title>
+<style>
+  body { font-family: sans-serif; padding: 20px; max-width: 500px; margin: 0 auto; }
+  input { width: 100%; padding: 8px; margin: 10px 0; box-sizing: border-box; }
+  button { padding: 10px 20px; margin: 5px 5px 5px 0; background: #111; color: #fff; border: none; cursor: pointer; }
+  .btn-logout { background: #e74c3c; }
+  #result { margin-top: 20px; padding: 10px; border: 1px solid #ccc; background: #f9f9f9; min-height: 80px; word-break: break-all; white-space: pre-wrap; }
+  .status { font-weight: bold; color: #2e7d32; }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<h2>数据隔离测试</h2>
+
+<p><strong>1. 填入你的门牌号和钥匙：</strong></p>
+<input type="text" id="supabaseUrl" value="请粘贴你的_project_url" />
+<input type="text" id="supabaseKey" value="请粘贴你的_publishable_key" />
+
+<p><strong>2. 当前登录状态：</strong></p>
+<div id="authStatus" style="font-weight:bold;color:#d35400;">未登录</div>
+
+<p><strong>3. 账号操作（请准备两个邮箱A和B）：</strong></p>
+<input type="email" id="email" placeholder="邮箱" />
+<input type="password" id="password" placeholder="密码（至少6位）" />
+<button id="btnLogin">登录</button>
+<button id="btnLogout" class="btn-logout">退出登录</button>
+<p><small>如果你还没有B账号，请用新的邮箱点这里注册并登录：<button id="btnRegister" style="background:#2b7fff; padding:4px 10px; font-size:12px;">注册B账号</button></small></p>
+
+<p><strong>4. 数据操作：</strong></p>
+<input type="text" id="dataContent" placeholder="输入要存入云端的文字（比如：这是A的数据）" value="这是账号A的数据" />
+<button id="btnSave">存入云端</button>
+<button id="btnRead">读取云端数据</button>
+
+<div id="result">等待操作...</div>
+
+<script>
+  let myClient = null;
+
+  function initSupabase() {
+    const url = document.getElementById('supabaseUrl').value.trim();
+    const key = document.getElementById('supabaseKey').value.trim();
+    if (!url || url === '请粘贴你的_project_url') { alert('请先填写 URL 和 Key'); return false; }
+    myClient = window.supabase.createClient(url, key);
+    return true;
+  }
+
+  async function updateAuthUI() {
+    if (!myClient) return;
+    const { data: { session } } = await myClient.auth.getSession();
+    const el = document.getElementById('authStatus');
+    if (session && session.user) {
+      el.innerHTML = '已登录：<span style="color:#2e7d32;">' + session.user.email + '</span> (ID: ' + session.user.id.substring(0,8) + '...)';
+    } else {
+      el.innerText = '未登录';
+    }
+  }
+
+  // 注册新账号
+  document.getElementById('btnRegister').onclick = async function() {
+    if (!initSupabase()) return;
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password) return alert('请填写邮箱和密码');
+    document.getElementById('result').innerText = '正在注册...';
+    const { data, error } = await myClient.auth.signUp({ email, password });
+    if (error) document.getElementById('result').innerText = '注册失败：' + error.message;
+    else { document.getElementById('result').innerText = '注册成功！已自动登录。'; await updateAuthUI(); }
+  };
+
+  // 登录
+  document.getElementById('btnLogin').onclick = async function() {
+    if (!initSupabase()) return;
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    if (!email || !password) return alert('请填写邮箱和密码');
+    document.getElementById('result').innerText = '正在登录...';
+    const { error } = await myClient.auth.signInWithPassword({ email, password });
+    if (error) document.getElementById('result').innerText = '登录失败：' + error.message;
+    else { document.getElementById('result').innerText = '登录成功！'; await updateAuthUI(); }
+  };
+
+  // 退出登录
+  document.getElementById('btnLogout').onclick = async function() {
+    if (!initSupabase()) return;
+    await myClient.auth.signOut();
+    document.getElementById('result').innerText = '已退出登录。';
+    await updateAuthUI();
+  };
+
+  // 存入云端（关键测试：写入属于当前用户ID的数据）
+  document.getElementById('btnSave').onclick = async function() {
+    if (!initSupabase()) return;
+    const { data: { session } } = await myClient.auth.getSession();
+    if (!session) return alert('请先登录再操作！');
+
+    const content = document.getElementById('dataContent').value;
+    document.getElementById('result').innerText = '正在存入云端...';
+
+    // 注意：这里我们特意写入 user_id，配合你的 RLS 策略
+    const { error } = await myClient.from('user_data').insert([
+      { user_id: session.user.id, data: { content: content } }
+    ]);
+
+    if (error) document.getElementById('result').innerText = '存入失败：' + error.message;
+    else document.getElementById('result').innerText = '存入成功！你刚刚存的数据属于：' + session.user.email;
+  };
+
+  // 读取云端
+  document.getElementById('btnRead').onclick = async function() {
+    if (!initSupabase()) return;
+    const { data: { session } } = await myClient.auth.getSession();
+    if (!session) return alert('请先登录再操作！');
+
+    document.getElementById('result').innerText = '正在读取云端...';
+
+    // 由于 RLS 策略的存在，这里只会查出属于当前登录用户的数据
+    const { data, error } = await myClient.from('user_data').select('*').order('id', { ascending: false });
+
+    if (error) {
+      document.getElementById('result').innerText = '读取失败：' + error.message;
+    } else {
+      let html = '<strong>读取成功！当前账号能看到的数据：</strong>\n\n';
+      if (data.length === 0) html += '（暂无数据）';
+      data.forEach(item => {
+        html += `[ID: ${item.id}] 内容：${item.data.content} \n`;
+      });
+      document.getElementById('result').innerText = html;
+    }
+  };
+
+  // 初始化时自动检查一下登录状态
+  setTimeout(async () => { if (initSupabase()) await updateAuthUI(); }, 500);
+</script>
+</body>
+</html>
