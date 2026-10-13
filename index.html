@@ -97,6 +97,14 @@
             <path d="M15 12 l1.5 1.5 2 -2"/>
           </svg>
         </button>
+        <!-- ★ 账号按钮，放在最后，带云朵图标和强制背景色 -->
+        <button type="button" class="home-tool-btn" onclick="openAccountPage()" title="账号与同步" aria-label="账号与同步">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M17.5 19H6.5C3.5 19 1 16.5 1 13.5C1 10.5 3.5 8 6.5 8C7.5 5 10.5 3 14 3C18 3 21 6 21 10C22 11 23 12.5 23 14C23 16.5 21 18.5 18.5 19H17.5Z" />
+            <circle cx="12" cy="11" r="2.5" />
+            <path d="M7 18C7 15.5 9 14 12 14C15 14 17 15.5 17 18" />
+          </svg>
+        </button>
       </div>
 
       <div class="home-wrap">
@@ -1563,7 +1571,11 @@
     <section class="page" id="pageBasicSetting">
       <div class="page-head">
         <h1>基础信息</h1>
-        <button class="action-btn ghost" onclick="showPage('pageSettings')" style="padding:8px 16px;">← 返回</button>
+        <div style="display:flex; gap:10px;">
+          <button class="action-btn ghost" id="basicSettingEditBtn" onclick="toggleBasicSettingEdit()" style="padding:8px 16px;">编辑</button>
+          <button class="action-btn" id="basicSettingSaveBtn" onclick="saveBasicSetting()" style="padding:8px 16px; display:none;">保存</button>
+          <button class="action-btn ghost" onclick="backFromBasicSetting()" style="padding:8px 16px;">← 返回</button>
+        </div>
       </div>
       <section class="panel">
         <div class="module" style="grid-template-columns: 1fr 1fr;">
@@ -1656,6 +1668,64 @@
       </div>
       <section class="panel">
         <div id="announcementHistoryList" class="announcement-history-list"></div>
+      </section>
+    </section>
+
+    <!-- 账号与同步 -->
+    <section class="page" id="pageAccount">
+      <div class="page-head">
+        <h1>账号与同步</h1>
+        <button class="action-btn ghost td-mini-btn" onclick="showPage('pageMain')">← 返回</button>
+      </div>
+
+      <!-- 区块一：账号状态 -->
+      <section class="panel" id="accountStatusPanel">
+        <div style="display:flex; align-items:center; gap:16px;">
+          <div style="width:60px; height:60px; border-radius:50%; background:#eef1f4; display:flex; align-items:center; justify-content:center; color:#555;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;"><circle cx="12" cy="8" r="4"/><path d="M4 21 a8 8 0 0 1 16 0"/></svg>
+          </div>
+          <div style="flex:1;">
+            <div id="accountStatusText" style="font-weight:700; font-size:16px;">当前未登录</div>
+            <div id="accountStatusSub" style="font-size:12.5px; color:var(--ink-soft); margin-top:4px;">数据仅保存在本机，换设备需手动导入</div>
+          </div>
+          <button class="action-btn td-mini-btn" id="btnAccountLogin" onclick="showAccountLogin()">立即登录 / 注册</button>
+          <button class="action-btn ghost td-mini-btn" id="btnAccountLogout" onclick="doAccountLogout()" style="display:none; border-color:var(--red); color:var(--red);">退出登录</button>
+        </div>
+      </section>
+
+      <!-- 区块三：云端同步（需登录） -->
+      <section class="panel" id="cloudSyncPanel" style="display:none;">
+        <div class="section-head-row">
+          <h2 class="section-title" style="flex:1; margin:0;">云端同步</h2>
+          <label class="switch-wrap" title="关闭后不自动同步">
+            <span class="switch-label-text">自动同步</span>
+            <span class="switch">
+              <input type="checkbox" id="autoSyncToggle" checked onchange="onAutoSyncToggle()" />
+              <span class="switch-slider"></span>
+            </span>
+          </label>
+        </div>
+        
+        <div style="font-size:12px; color:var(--ink-soft); margin:0 0 14px; display:flex; justify-content:space-between;">
+          <span>上次同步：<span id="lastSyncTime">从未同步</span></span>
+          <span id="syncStatusText"></span>
+        </div>
+
+        <div class="actions cloud-sync-actions" style="justify-content:flex-start; margin-top:4px;">
+          <button class="action-btn ghost" onclick="doCoverCloud()">覆盖云端</button>
+          <button class="action-btn ghost" onclick="doCoverLocal()">覆盖本机</button>
+          <button class="action-btn ghost" onclick="doDataMerge()">数据合并</button>
+        </div>
+      </section>
+
+      <!-- 区块四：手动同步 -->
+      <section class="panel" id="manualSyncPanel">
+        <h2 class="section-title">手动同步</h2>
+        <div class="actions manual-sync-actions" style="justify-content:flex-start; margin-top:4px;">
+          <button class="action-btn ghost" onclick="exportAllData()">导出数据</button>
+          <button class="action-btn ghost" onclick="importAllData()">导入数据</button>
+          <button class="action-btn ghost" onclick="resetAllData()">恢复初始</button>
+        </div>
       </section>
     </section>
 
@@ -1799,7 +1869,7 @@
 </div>
 
 <div id="modalRoot"></div>
-
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="vendor/html2canvas.min.js"></script>
 <script src="script.js"></script>
 <script>

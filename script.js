@@ -25,7 +25,7 @@
 /* ══════════ [U-01] 全局常量 / 存储 key ══════════ */
 
 /* ---- 应用版本（用于更新公告） ---- */
-const APP_VERSION = '1.1.4';
+const APP_VERSION = '1.2.0';
 const ANNOUNCEMENT_SEEN_KEY = 'listReceiptAnnouncementSeen';
 
 /* ---- 数据版本 + 迁移 ---- */
@@ -1233,27 +1233,54 @@ window.addEventListener('beforeunload', releaseAllObjectURLs);
 async function saveImageBlob(blob, name) {
   if (!blob) return '';
 
+  // 1. 先保存在本地 IndexedDB
+  let localRef = '';
   if (!__idbAvailable) {
-    return await blobToDataURL(blob);
+    localRef = await blobToDataURL(blob);
+  } else {
+    const id = makeUniqueId('file');
+    const rec = {
+      id: id,
+      blob: blob,
+      name: String(name || ''),
+      type: String(blob.type || ''),
+      size: Number(blob.size || 0),
+      createdAt: Date.now(),
+    };
+    try {
+      await idbPutFile(rec);
+      localRef = id;
+    } catch (e) {
+      console.warn('[IDB] 写入失败，降级 base64', e);
+      localRef = await blobToDataURL(blob);
+    }
   }
 
-  const id = makeUniqueId('file');
-  const rec = {
-    id: id,
-    blob: blob,
-    name: String(name || ''),
-    type: String(blob.type || ''),
-    size: Number(blob.size || 0),
-    createdAt: Date.now(),
-  };
+  // 2. 如果已登录，同时把图片上传到云端 Supabase Storage
+  if (currentUser && supabaseClient) {
+    try {
+      // 生成一个独一无二的云路径，带上用户ID，保证隔离安全
+      const fileExt = blob.type === 'image/webp' ? 'webp' : 'png';
+      const cloudPath = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
 
-  try {
-    await idbPutFile(rec);
-    return id;
-  } catch (e) {
-    console.warn('[IDB] 写入失败，降级 base64', e);
-    return await blobToDataURL(blob);
+      const { error } = await supabaseClient.storage
+        .from('images')
+        .upload(cloudPath, blob, { contentType: blob.type, upsert: true });
+
+      if (!error) {
+        // 上传成功，把云路径记在本地 IDB 里，方便以后去云上找
+        // 我们直接把云路径拼接到本地引用上，用双下划线隔开，方便解析
+        localRef = localRef + '__cloud__' + cloudPath;
+        console.log('图片成功上传到云端:', cloudPath);
+      } else {
+        console.warn('图片上传云端失败:', error.message);
+      }
+    } catch (err) {
+      console.warn('图片上传云端异常:', err);
+    }
   }
+
+  return localRef;
 }
 
 async function saveBase64Image(dataUrl, name) {
@@ -1267,11 +1294,103 @@ async function saveBase64Image(dataUrl, name) {
 async function resolveImageSrc(ref) {
   if (!ref) return '';
   const s = String(ref);
+
+  // 1. 如果是直链或 base64，直接返回
   if (s.indexOf('data:') === 0 || s.indexOf('blob:') === 0 || s.indexOf('http') === 0) {
     return s;
   }
-  const url = await getFileObjectURL(s);
-  return url || '';
+
+  // 2. 解析出本地引用和云路径
+  let localId = s;
+  let cloudPath = '';
+  if (s.indexOf('__cloud__') > -1) {
+    const parts = s.split('__cloud__');
+    localId = parts[0];
+    cloudPath = parts[1];
+  }
+
+  // 3. 先尝试从本地 IDB 读取
+  const localUrl = await getFileObjectURL(localId);
+  if (localUrl) return localUrl;
+
+  // 4. 本地没有（比如换了设备），从云端下载
+  if (cloudPath && currentUser && supabaseClient) {
+    try {
+      console.log('本地找不到图片，正在从云端下载:', cloudPath);
+      const { data, error } = await supabaseClient.storage.from('images').download(cloudPath);
+      
+      if (!error && data) {
+        // 下载成功，存回本地 IDB，这样下次就不需要再下载了
+        const newLocalId = makeUniqueId('file');
+        await idbPutFile({
+          id: newLocalId, blob: data, name: cloudPath,
+          type: data.type, size: data.size, createdAt: Date.now(),
+        });
+        
+        // 返回新生成的本地 URL
+        return await getFileObjectURL(newLocalId);
+      }
+    } catch (err) {
+      console.warn('从云端下载图片失败', err);
+    }
+  }
+
+  return '';
+}async function resolveImageSrc(ref) {
+  if (!ref) return '';
+  const s = String(ref);
+
+  // 1. 如果是直链或 base64，直接返回
+  if (s.indexOf('data:') === 0 || s.indexOf('blob:') === 0 || s.indexOf('http') === 0) {
+    return s;
+  }
+
+  // 2. 解析出本地引用和云路径
+  let localId = s;
+  let cloudPath = '';
+  if (s.indexOf('__cloud__') > -1) {
+    const parts = s.split('__cloud__');
+    localId = parts[0];
+    cloudPath = parts[1];
+  }
+
+  // 3. 先尝试从本地 IDB 读取
+  const localUrl = await getFileObjectURL(localId);
+  if (localUrl) return localUrl;
+
+  // 4. 本地没有（比如换了设备），从云端下载
+  if (cloudPath && supabaseClient) {
+    try {
+      // ★ 核心修复：不依赖全局 currentUser，强制自己去拿 Session
+      let { data: { session } } = await supabaseClient.auth.getSession();
+      
+      // 如果还是没 Session，说明刚打开页面，等 1 秒再试一次
+      if (!session) {
+        await new Promise(r => setTimeout(r, 1000));
+        const res = await supabaseClient.auth.getSession();
+        session = res.data.session;
+      }
+      
+      if (!session) return ''; // 确实没登录，放弃
+
+      console.log('本地找不到图片，正在从云端下载:', cloudPath);
+      const { data, error } = await supabaseClient.storage.from('images').download(cloudPath);
+      
+      if (!error && data) {
+        // 下载成功，存回本地 IDB，这样下次就不需要再下载了
+        const newLocalId = makeUniqueId('file');
+        await idbPutFile({
+          id: newLocalId, blob: data, name: cloudPath,
+          type: data.type, size: data.size, createdAt: Date.now(),
+        });
+        // 返回新生成的本地 URL
+        return await getFileObjectURL(newLocalId);
+      }
+    } catch (err) {
+      console.warn('从云端下载图片失败', err);
+    }
+  }
+  return '';
 }
 
 /* ★ 安全删除：如果图片被任何预设引用，就跳过 */
@@ -1293,9 +1412,28 @@ async function deleteImageRef(ref) {
   if (!ref) return;
   const s = String(ref);
   if (s.indexOf('data:') === 0 || s.indexOf('blob:') === 0) return;
-  releaseObjectURL(s);
-  try { await idbDeleteFile(s); }
-  catch (e) {}
+
+  let localId = s;
+  let cloudPath = '';
+  if (s.indexOf('__cloud__') > -1) {
+    const parts = s.split('__cloud__');
+    localId = parts[0];
+    cloudPath = parts[1];
+  }
+
+  // 1. 删除本地
+  releaseObjectURL(localId);
+  try { await idbDeleteFile(localId); } catch (e) {}
+
+  // 2. 删除云端
+  if (cloudPath && currentUser && supabaseClient) {
+    try {
+      await supabaseClient.storage.from('images').remove([cloudPath]);
+      console.log('已删除云端图片:', cloudPath);
+    } catch (err) {
+      console.warn('删除云端图片失败', err);
+    }
+  }
 }
 
 function isFileIdRef(ref) {
@@ -1306,9 +1444,67 @@ function isFileIdRef(ref) {
         || s.indexOf('http') === 0);
 }
 
+/* ---------- 核心：前端图片 WebP 压缩引擎 ---------- */
+async function compressImageToWebP(file, maxWidth = 1200, quality = 0.8) {
+  return new Promise((resolve) => {
+    if (!file || !/^image\//.test(file.type)) { resolve(file); return; }
+    // 如果原图很小（小于150KB），直接返回原图，不折腾
+    if (file.size <= 150 * 1024) { resolve(file); return; }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const img = new Image();
+      img.onload = function() {
+        let width = img.naturalWidth || img.width;
+        let height = img.naturalHeight || img.height;
+
+        // 如果宽度大于 maxWidth，等比例缩放
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        
+        // 处理EXIF方向（防止手机照片横过来）
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // 转换为 WebP Blob
+        canvas.toBlob((blob) => {
+          if (blob && blob.size < file.size) {
+            // 压缩成功，且比原图小，使用压缩后的图
+            resolve(blob);
+          } else {
+            // 压缩失败，或者比原图大，直接用原图
+            resolve(file);
+          }
+        }, 'image/webp', quality); // 压缩为 WebP 格式
+      };
+      img.onerror = () => resolve(file); // 加载失败，原图兜底
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+/* ---------- 统一图片入口（已接入压缩） ---------- */
 async function saveImageFromFile(file, name) {
   if (!file) return '';
-  return await saveImageBlob(file, name || file.name || '');
+  try {
+    // ★ 核心改造：所有上传图片，先经过压缩
+    let finalBlob = file;
+    if (/^image\//.test(file.type)) {
+      finalBlob = await compressImageToWebP(file, 1200, 0.8);
+    }
+    return await saveImageBlob(finalBlob, name || file.name || '');
+  } catch (e) {
+    console.warn('图片压缩或保存失败，使用原图兜底', e);
+    return await saveImageBlob(file, name || file.name || '');
+  }
 }
 
 
@@ -2526,7 +2722,11 @@ function renderAlgorithmSettings() {
     <div class="modal-overlay" onclick="if(event.target===this)closeAlgorithmSettings()">
       <div class="modal algo-modal" onclick="event.stopPropagation()">
         <div class="modal-head">
-          <h3>算法设置</h3>
+          <h3 style="flex:1; display:flex; align-items:center;">算法设置 
+            <button class="icon-btn" style="color:#2b7fff; display:inline-flex; width:22px; height:22px; padding:0; margin-left:8px; vertical-align:middle;" onclick="showAlgorithmFormulaModal()" title="查看算法公式说明">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="8.01"/><line x1="12" y1="11" x2="12" y2="16"/></svg>
+            </button>
+          </h3>
           <button class="icon-btn" onclick="closeAlgorithmSettings()">×</button>
         </div>
         <div class="modal-body">
@@ -4576,10 +4776,10 @@ function applyReceiptPreset(preset) {
   if (p.footerImg) s.footerImg = p.footerImg;
   if (p.bgImg)     s.bgImg     = p.bgImg;
 
-  /* 图片位置状态 */
-  if (p.headerImgState) s.headerImgState = JSON.parse(JSON.stringify(p.headerImgState));
-  if (p.footerImgState) s.footerImgState = JSON.parse(JSON.stringify(p.footerImgState));
-  if (p.bgImgState)     s.bgImgState     = JSON.parse(JSON.stringify(p.bgImgState));
+    /* 图片位置状态 */
+    if (p.headerImgState) s.headerImgState = JSON.parse(JSON.stringify(p.headerImgState));
+    if (p.footerImgState) s.footerImgState = JSON.parse(JSON.stringify(p.footerImgState));
+    if (p.bgImgState)     s.bgImgState     = JSON.parse(JSON.stringify(p.bgImgState));
 
   setReceiptSettings(s);
   fillReceiptSettingsForm();
@@ -4590,13 +4790,13 @@ function applyReceiptPreset(preset) {
   if (typeof fillContentSettingsForm === 'function') fillContentSettingsForm();
 
   /* 图片加载完后重新绑定编辑手柄 */
-  if ($('receiptLayout') && $('receiptLayout').classList.contains('settings-open')) {
-    setTimeout(() => {
-      setupReceiptImgDrag();
-      updateReceiptImageActiveState();
-    }, 200);
+      if ($('receiptLayout') && $('receiptLayout').classList.contains('settings-open')) {
+      setTimeout(() => {
+        setupReceiptImgDrag();
+        updateReceiptImageActiveState();
+      }, 200);
+    }
   }
-}
 
 function deleteReceiptPreset(idx) {
   const list = getReceiptPresetList();
@@ -5580,8 +5780,6 @@ function generate() {
       }
 
       summaryHtml += `<div class="gs-row gs-total"><span>组合计</span><span>${fmt(cg.groupTotal)}</span></div>`;
-
-            summaryHtml += `<div class="gs-row gs-total"><span>组合计</span><span>${fmt(cg.groupTotal)}</span></div>`;
       summaryHtml += '</div>';
 
       html += summaryHtml;
@@ -6298,7 +6496,11 @@ function askDeleteTodo(id) {
     </div>`;
 }
 
-function confirmDeleteTodo(id) {
+async function confirmDeleteTodo(id) {
+  const targetTodo = getTodos().find(t => t.id === id);
+  if (targetTodo) {
+    await cleanupOrderImages(targetTodo); // ★ 新增：清理图片
+  }
   const todos = getTodos().filter(t => t.id !== id);
   setTodos(todos);
   removeFlowsByTodoId(id);
@@ -7304,6 +7506,10 @@ function editTodoReceipt() {
    ═══════════════════════════════════════════════════════ */
 
 async function importToTodo() {
+  if (window.isImportingTodo) return; // 如果正在导入，直接拦截
+  window.isImportingTodo = true;
+  setTimeout(() => { window.isImportingTodo = false; }, 5000); // 5秒后自动解锁，防止卡死
+  
   const receiptPanel = $('receiptPanel');
   if (!receiptPanel || receiptPanel.classList.contains('hidden')) {
     showSimpleAlert('提示', '请先点「确定生成」生成小票。');
@@ -7540,9 +7746,14 @@ async function importToTodo() {
   if (typeof renderSchedule === 'function') renderSchedule();
   if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
+  
+  // ★ 导入订单成功后，强制同步一次云端
+  if (typeof currentUser !== 'undefined' && currentUser && typeof doCoverCloudInternal === 'function') {
+    doCoverCloudInternal().catch(e => console.warn(e));
+  }
+  
   showPage('pageTodo');
 }
-
 
 /* ═══════════════════════════════════════════════════════
    [F-08] calcSnapshotAmounts —— 从快照算金额
@@ -8453,6 +8664,12 @@ async function confirmFinalSettle() {
 
   if (!completed) { closeModal(); return; }
 
+  /* ★ 新增：如果生成了新的结单小票，顺便把旧的订单小票物理删除，避免多占存储空间 */
+  if (finalReceiptRef && t.receiptImage && t.receiptImage !== finalReceiptRef) {
+    try { await deleteImageRef(t.receiptImage); } catch (e) {}
+    t.receiptImage = finalReceiptRef; // 更新为最新
+  }
+
   /* 记尾款流水（负尾款 → 退款流水） */
   if (s.finalAmount > 0) {
     addFlow('final', s.finalAmount, '尾款 · ' + (t.clientName || '未命名'), today, {
@@ -8465,6 +8682,9 @@ async function confirmFinalSettle() {
       completedId: completed.id,
     });
   }
+
+  /* ★ 新增：清理该订单的素材和要求图片（释放云端空间） */
+  cleanupOrderImages(t).catch(e => console.warn(e));
 
   /* 从待办移除 */
   setTodos(todos.filter(x => x.id !== s.todoId));
@@ -8553,6 +8773,13 @@ async function generateFinalReceipt(todo, settleState) {
     /* 5. ★ 关键：把真实的小票 DOM 移到屏幕外（不是克隆，保留所有内联 CSS 变量） */
     offscreen.appendChild(receiptEl);
 
+    /* ★ 核心修复1：强行触发一次重绘，重新计算图片的尺寸和位置，防止错乱 */
+    if (typeof applyReceiptSettings === 'function') {
+      applyReceiptSettings();
+    }
+    // 给足时间让图片重新调整尺寸
+    await new Promise(r => setTimeout(r, 500)); 
+
     /* 6. 改付款区（改的是真实的 DOM） */
     const payTotals = receiptEl.querySelector('.pay-totals');
     let originalPayHTML = '';
@@ -8576,10 +8803,27 @@ async function generateFinalReceipt(todo, settleState) {
       if (finalRow) finalRow.style.display = 'none';
     }
 
-    /* 7. 等图片加载完 */
-    await waitForImagesIn(receiptEl, 1800);
+    /* 7. ★ 核心修复：等图片加载完，并强制重算布局，防止票尾覆盖和背景图不适配 */
+    await waitForImagesIn(receiptEl, 3000);
     await new Promise(r => requestAnimationFrame(r));
-    await new Promise(r => setTimeout(r, 100));
+    
+    // 强制修正票尾块高度，防止绝对定位的图片盖住上方金额
+    const footerBlock = receiptEl.querySelector('#outFooterBlock');
+    const footerImg = receiptEl.querySelector('#outFooterImg');
+    if (footerBlock && footerImg && footerBlock.classList.contains('show')) {
+      const imgH = footerImg.offsetHeight || 0;
+      const imgT = parseFloat(footerImg.style.top) || 0;
+      footerBlock.style.height = (imgT + imgH) + 'px';
+    }
+
+    // 强制背景图拉伸到小票实际内容高度，解决长度不适配
+    const bgImg = receiptEl.querySelector('#outBgImg');
+    if (bgImg && bgImg.classList.contains('has-img')) {
+      bgImg.style.height = receiptEl.scrollHeight + 'px';
+      bgImg.style.width = receiptEl.clientWidth + 'px';
+    }
+
+    await new Promise(r => setTimeout(r, 300));
 
     /* 8. 截图（截图前隐藏所有编辑手柄，防止被截进去） */
     const handleState = hideAllReceiptHandles();
@@ -8661,7 +8905,8 @@ function openFinalReceiptModal(imageRef) {
     body.innerHTML = `
       <img src="${escapeAttr(url)}" alt="结单小票"
            style="max-width:100%;max-height:55vh;border:1px solid var(--line-soft);display:block;margin:0 auto;" />
-      <div class="actions" style="justify-content:center;margin-top:18px;">
+      <div class="actions" style="justify-content:center;margin-top:18px;gap:10px;">
+        <button class="action-btn ghost" onclick="closeFinalReceiptAndExit()">不保存退出</button>
         <button class="action-btn" onclick="saveFinalReceiptAndClose('${escapeAttr(imageRef)}')">保存到相册</button>
       </div>
     `;
@@ -8670,7 +8915,23 @@ function openFinalReceiptModal(imageRef) {
     showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
   });
 }
+/* ══════════ 不保存直接退出结单小票 ══════════ */
+function closeFinalReceiptAndExit() {
+  closeModal();
 
+  // 手动切页面（不走 showPage，避免触发"小票未导入"警告）
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const target = $('pageCompleted');
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    if (btn.dataset.page === 'pageTodo') btn.classList.add('active');
+    else btn.classList.remove('active');
+  });
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (typeof renderCompletedList === 'function') renderCompletedList();
+}
 async function saveFinalReceiptAndClose(imageRef) {
   try {
     const url = await resolveImageSrc(imageRef);
@@ -8833,7 +9094,7 @@ function discardTodo(id) {
     </div>`;
 }
 
-function confirmPlaceholderDiscard(doRefund) {
+async function confirmPlaceholderDiscard(doRefund) {
   const state = window.__discardState;
   if (!state) { closeModal(); return; }
 
@@ -8871,6 +9132,9 @@ function confirmPlaceholderDiscard(doRefund) {
     receiptSnapshot: t.receiptSnapshot || null,
     tags: (t.tags || []).slice(),
   });
+
+  /* ★ 新增：清理该订单的素材和要求图片 */
+  cleanupOrderImages(t).catch(e => console.warn(e));
 
   setTodos(todos.filter(x => x.id !== state.id));
 
@@ -9002,7 +9266,7 @@ function onDiscardFinalAmountChange() {
   }
 }
 
-function confirmDiscard() {
+async function confirmDiscard() {
   const state = window.__discardState;
   if (!state) { closeModal(); return; }
 
@@ -9037,6 +9301,9 @@ function confirmDiscard() {
       receiptSnapshot: t.receiptSnapshot || null,
       tags: (t.tags || []).slice(),
     });
+    /* ★ 新增：清理该订单的素材和要求图片 */
+    cleanupOrderImages(t).catch(e => console.warn(e));
+
     setTodos(todos.filter(x => x.id !== state.id));
     window.__discardState = null;
     closeModal();
@@ -9145,7 +9412,7 @@ function confirmDiscard() {
   }
 }
 
-function confirmDiscardNegative(doRefund) {
+async function confirmDiscardNegative(doRefund) {
   const state = window.__discardState;
   if (!state) { closeModal(); return; }
 
@@ -9346,7 +9613,7 @@ function cancelTodo(id) {
     </div>`;
 }
 
-function confirmPlaceholderCancel(doRefund) {
+async function confirmPlaceholderCancel(doRefund) {
   const state = window.__cancelState;
   if (!state) { closeModal(); return; }
 
@@ -9385,6 +9652,9 @@ function confirmPlaceholderCancel(doRefund) {
     receiptSnapshot: t.receiptSnapshot || null,
     tags: (t.tags || []).slice(),
   });
+
+  /* ★ 新增：清理该订单的素材和要求图片 */
+  cleanupOrderImages(t).catch(e => console.warn(e));
 
   setTodos(todos.filter(x => x.id !== state.id));
 
@@ -9524,7 +9794,7 @@ function onCancelFeePrepaidToggle() {
   onCancelFeeValueChange();
 }
 
-function confirmCancel() {
+async function confirmCancel() {
   const state = window.__cancelState;
   if (!state) { closeModal(); return; }
 
@@ -9684,7 +9954,7 @@ function confirmCancel() {
   }
 }
 
-function confirmCancelNegative(doRefund) {
+async function confirmCancelNegative(doRefund) {
   const state = window.__cancelState;
   if (!state) { closeModal(); return; }
 
@@ -9723,6 +9993,9 @@ function confirmCancelNegative(doRefund) {
     receiptSnapshot: t.receiptSnapshot || null,
     tags: (t.tags || []).slice(),
   });
+
+  /* ★ 新增：清理该订单的素材和要求图片 */
+  cleanupOrderImages(t).catch(e => console.warn(e));
 
   setTodos(todos.filter(x => x.id !== state.id));
   window.__cancelState = null;
@@ -18531,6 +18804,39 @@ function backFromOrderFilterResult() {
 
 var USER_MANUAL_MODULES = [
   {
+    id: 'cloud',
+    title: '云同步',
+    items: [
+      {
+        title: '账号与同步（云同步）',
+        html: `
+          <p><strong>按钮位置：</strong>首页右上角按钮排最后一位（云朵图标）。</p>
+          <p><strong>按钮功能：</strong>登录账号后，将订单、单主、自定义设置等数据备份到云端。更换设备或清缓存后，登录同一账号即可自动恢复数据，实现跨设备无缝衔接。</p>
+          <p><strong>怎么操作：</strong></p>
+          <ol>
+            <li><strong>注册 / 登录：</strong>点击首页云朵图标，进入“账号与同步”页面，点击【立即登录 / 注册】完成操作。</li>
+            <li><strong>手动同步：</strong>登录后，点击【覆盖云端】将本机数据备份到云；点击【覆盖本机】将云端数据拉取到当前设备。</li>
+            <li><strong>自动同步：</strong>默认开启。操作软件时系统会在后台默默上传；换新设备登录账号时，系统会自动拉取云端数据。</li>
+          </ol>
+          <p><strong>注意：</strong>如果收不到密码找回邮件，请检查垃圾箱，或直接重新注册新账号。</p>
+        `
+      },
+      {
+        title: '结单小票保存选项',
+        html: `
+          <p><strong>功能位置：</strong>订单结单后弹出的“结单小票”弹窗。</p>
+          <p><strong>功能说明：</strong>可自行选择是否将小票图片保存到相册，不再强制保存。</p>
+          <p><strong>怎么操作：</strong></p>
+          <ul>
+            <li>点击【保存到相册】即可下载图片。</li>
+            <li>点击【不保存退出】直接关闭弹窗并返回结单列表。</li>
+          </ul>
+          <p><strong>注意：</strong>无论是否保存图片，结单小票都已经自动存入“票夹”和“结单记录”中，以后随时可以查看。</p>
+        `
+      }
+    ]
+  },
+  {
     id: 'quickstart',
     title: '快速上手',
     items: [
@@ -19855,6 +20161,7 @@ var __umCurrentModuleId = '';
 /* 用户手册模块显示顺序 */
 var UM_MODULE_ORDER = [
   'quickstart',
+  'cloud',
   'receipt',
   'serviceFee',
   'algorithm',
@@ -20093,6 +20400,17 @@ const ANNOUNCEMENTS = {
       <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
     `,
   },
+  '1.2.0': {
+    title: '账号云同步上线',
+    html: `
+      <ul style="padding-left:20px;line-height:1.85;">
+        <li><strong>云同步功能上线</strong>：首页右上角新增“账号与同步”按钮（最后一个云朵图标）。</li>
+        <li><strong>跨设备无缝衔接</strong>：现在你可以注册并登录账号。开启云端同步后，同账号数据可跨设备/浏览器使用。</li>
+        <li><strong>结单小票更贴心</strong>：生成结单小票时，可自行选择是否保存图片，不再强制保存。</li>
+      </ul>
+      <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
+    `,
+  },
 };
 
 
@@ -20136,8 +20454,9 @@ function showAnnouncementModal(ann) {
         <div class="ann-card-body">
           ${ann.html || '<p>本次更新暂无说明。</p>'}
         </div>
-        <div class="ann-card-foot">
-          <button type="button" class="ann-card-btn" onclick="closeAnnouncement()">我知道了</button>
+        <div class="ann-card-foot" style="display:flex; gap:10px;">
+          <button type="button" class="ann-card-btn" style="flex:1; background:#ffffff; color:var(--ink); border:1px solid var(--line);" onclick="closeAnnouncement()">我知道了</button>
+          <button type="button" class="ann-card-btn" style="flex:1;" onclick="closeAnnouncement(); showAccountLogin();">注册 / 登录账号</button>
         </div>
       </div>
     </div>`;
@@ -24436,4 +24755,758 @@ function disablePlDevMode() {
 /* --- 用户入口：打开位置编辑工具 --- */
 function openPlPositionEditor() {
   openPlAdjustTool();
+}
+
+/* ═══════════════════════════════════════════════════════
+   [云端同步模块] 账号与数据同步（V4 终极完美版）
+   ═══════════════════════════════════════════════════════ */
+
+const SUPABASE_URL = 'https://veposzblhmkcqxjeqpym.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_i5a7ALhLYrsncz6OeyCAEA_TabIUsdF';
+
+let supabaseClient = null;
+let currentUser = null;
+let autoSyncTimer = null;
+
+function initCloud() {
+  if (!supabaseClient) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return false;
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+  return true;
+}
+
+async function openAccountPage() {
+  showPage('pageAccount');
+  if (!initCloud()) return;
+  await checkUserSession();
+  updateSyncStatusUI();
+}
+
+async function checkUserSession() {
+  if (!supabaseClient) return;
+  const { data: { session }, error } = await supabaseClient.auth.getSession();
+  
+  if (error || !session) {
+    currentUser = null;
+    document.getElementById('accountStatusText').innerText = '当前未登录';
+    document.getElementById('accountStatusSub').innerText = '数据仅保存在本机，换设备需手动导入';
+    document.getElementById('btnAccountLogin').style.display = 'block';
+    document.getElementById('btnAccountLogout').style.display = 'none';
+    document.getElementById('cloudSyncPanel').style.display = 'none';
+  } else {
+    currentUser = session.user;
+    document.getElementById('accountStatusText').innerText = '已登录';
+    document.getElementById('accountStatusSub').innerText = session.user.email;
+    document.getElementById('btnAccountLogin').style.display = 'none';
+    document.getElementById('btnAccountLogout').style.display = 'block';
+    document.getElementById('cloudSyncPanel').style.display = 'block';
+    
+    const autoSync = localStorage.getItem('listReceiptAutoSync') !== '0';
+    document.getElementById('autoSyncToggle').checked = autoSync;
+  }
+}
+
+function isAutoSyncEnabled() {
+  return localStorage.getItem('listReceiptAutoSync') !== '0';
+}
+
+function onAutoSyncToggle() {
+  const enabled = document.getElementById('autoSyncToggle').checked;
+  localStorage.setItem('listReceiptAutoSync', enabled ? '1' : '0');
+  if (enabled) {
+    showToast('自动同步已开启');
+    triggerAutoSync();
+  } else {
+    showToast('自动同步已关闭');
+    if (autoSyncTimer) clearTimeout(autoSyncTimer);
+    document.getElementById('syncStatusText').innerText = '已暂停';
+  }
+}
+
+function triggerAutoSync() {
+  if (!currentUser || !isAutoSyncEnabled()) return;
+  
+  // ★ 核心策略：在“基础信息页”和“小票填写页”时，禁止触发自动同步。
+  // 这些页面只有用户点击“保存”或“导入订单”时，才会手动调用 doCoverCloudInternal() 同步。
+  const currentActivePage = document.querySelector('.page.active');
+  if (currentActivePage) {
+    const pageId = currentActivePage.id;
+    if (pageId === 'pageBasicSetting' || pageId === 'pageReceipt') {
+      // 记入待同步状态，不触发网络请求
+      window.__syncPending = true;
+      return; 
+    }
+  }
+
+  const statusEl = document.getElementById('syncStatusText');
+  if (statusEl) statusEl.innerText = '有更新，待上传...';
+
+  if (autoSyncTimer) clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(async () => {
+    if (statusEl) statusEl.innerText = '正在自动上传...';
+    await doCoverCloudInternal();
+  }, 5000);
+}
+
+// ★ 劫持本地存储，任何修改都会触发自动同步
+const originalSetItem = localStorage.setItem;
+localStorage.setItem = function(key, value) {
+  originalSetItem.apply(this, [key, value]);
+  if (key && key.indexOf('listReceipt') === 0 && key !== 'listReceiptAutoSync' && key !== 'listReceiptLastSyncTime') {
+    triggerAutoSync();
+  }
+};
+
+function updateSyncStatusUI() {
+  const lastSync = localStorage.getItem('listReceiptLastSyncTime');
+  const el = document.getElementById('lastSyncTime');
+  if (el && lastSync) {
+    const d = new Date(Number(lastSync));
+    el.innerText = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  }
+}
+
+/* ══════════ 核心同步逻辑（内部静默版） ══════════ */
+let isUploading = false; // ★ 增加并发锁
+
+async function doCoverCloudInternal() {
+  if (!currentUser) return;
+  if (isUploading) return; // 并发锁
+  isUploading = true;
+
+  try {
+    // 记录本地操作时间，防止同步时被云端覆盖
+    originalSetItem.call(localStorage, 'lastLocalModifyTime', Date.now().toString());
+
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (!session) { isUploading = false; return; }
+    currentUser = session.user;
+
+    const lsData = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.indexOf('listReceipt') === 0 && key !== 'listReceiptAutoSync' && key !== 'listReceiptLastSyncTime' && key !== 'lastLocalModifyTime') {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          try { 
+            let parsed = JSON.parse(raw);
+            if (typeof parsed === 'string') parsed = parsed.replace(/^"|"$/g, '');
+            lsData[key] = parsed; 
+          } catch (e) { lsData[key] = raw; }
+        }
+      }
+    }
+
+        const payload = { data: lsData, updatedAt: Date.now() };
+    
+    // ★ 终极完美修复：使用 upsert（有则更新，无则插入）。
+    // 这样不仅云端永远只有 1 行数据，而且不会出现“删除后插入失败导致数据丢失”的风险，绝对安全。
+    const { error } = await supabaseClient
+      .from('user_data')
+      .upsert(
+        { user_id: session.user.id, data: payload, updated_at: new Date().toISOString() }, 
+        { onConflict: 'user_id' }
+      );
+
+    if (error) {
+      console.warn('自动同步被暂时拒绝 (RLS)，5秒后自动重试...', error.message);
+      const statusEl = document.getElementById('syncStatusText');
+      if (statusEl) statusEl.innerText = '同步重试中...';
+      
+      isUploading = false;
+      setTimeout(() => { doCoverCloudInternal(); }, 5000);
+      return;
+    }
+
+    originalSetItem.call(localStorage, 'listReceiptLastSyncTime', Date.now().toString());
+    updateSyncStatusUI();
+    showToast('✅ 自动同步成功！', 3000);
+    const statusEl = document.getElementById('syncStatusText');
+    if (statusEl) statusEl.innerText = '已同步';
+
+  } catch (e) {
+    console.error('自动同步异常', e);
+  } finally {
+    isUploading = false;
+  }
+}
+
+// ★ 核心修复：不仅拉取数据，还要强制刷新所有界面元素（不再需要 F5）
+async function doCoverLocalInternal() {
+    // ★ 防回滚护栏：如果本地 15 秒内有过修改，说明用户正在操作，拒绝从云端覆盖本地的拉取！
+  const lastMod = localStorage.getItem('lastLocalModifyTime');
+  if (lastMod && Date.now() - Number(lastMod) < 15000) {
+    console.warn('本地有新鲜操作，已跳过此次云端覆盖');
+    return;
+  }
+  let session = null;
+  let retries = 0;
+  while (!session && retries < 5) {
+    const res = await supabaseClient.auth.getSession();
+    if (res.data && res.data.session) {
+      session = res.data.session;
+      currentUser = session.user;
+      break;
+    }
+    await new Promise(r => setTimeout(r, 300));
+    retries++;
+  }
+  
+  if (!session) { showToast('登录状态未完全就绪，请稍后再试'); return; }
+
+  const { data, error } = await supabaseClient
+    .from('user_data')
+    .select('data')
+    .order('id', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) { showToast('❌ 读取云端失败：' + error.message); return; }
+  if (!data || !data.data) { showToast('云端没有备份数据，无法覆盖本机。'); return; }
+
+  let remoteData = data.data;
+  if (remoteData && remoteData.data) remoteData = remoteData.data;
+  if (!remoteData || typeof remoteData !== 'object') { showToast('云端数据格式异常，无法同步'); return; }
+
+  for (const key in remoteData) {
+    if (Object.prototype.hasOwnProperty.call(remoteData, key)) {
+      let val = remoteData[key];
+      if (typeof val === 'string') {
+        val = val.replace(/^"|"$/g, '').replace(/^'|'$/g, '').trim();
+        originalSetItem.call(localStorage, key, val);
+      } else {
+        originalSetItem.call(localStorage, key, JSON.stringify(val));
+      }
+    }
+  }
+
+  requestAnimationFrame(() => {
+    showToast('✅ 数据同步成功！正在刷新页面内容...', 3000);
+    
+    // 刷新主模块
+    if (typeof renderTodoList === 'function') renderTodoList();
+    if (typeof renderMasterList === 'function') renderMasterList();
+    if (typeof renderSchedule === 'function') renderSchedule();
+    if (typeof renderStatsPage === 'function') renderStatsPage();
+    if (typeof renderCompletedList === 'function') renderCompletedList();
+    if (typeof renderCancelledList === 'function') renderCancelledList();
+    if (typeof renderDiscardedList === 'function') renderDiscardedList();
+
+    // ★ 核心修复：补上漏掉的「身份预设列表」刷新！让它瞬间变成最新值，无需刷新页面！
+    if (typeof renderIdentityList === 'function') renderIdentityList();
+
+    // 强制重绘身份下拉框和ID输入框
+    const newIdentity = localStorage.getItem('listReceiptDefaultIdentity') || '画师';
+    const newArtistName = localStorage.getItem('listReceiptArtistName') || '';
+    const identities = getIdentities();
+
+    const identitySel = document.getElementById('setIdentity');
+    if (identitySel) {
+      identitySel.innerHTML = identities.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
+      identitySel.value = newIdentity;
+    }
+    
+    const setNameInput = document.getElementById('setName');
+    if (setNameInput) setNameInput.value = newArtistName;
+
+    // 刷新小票页的画师美工
+    if (typeof renderArtistIdentitySelect === 'function') renderArtistIdentitySelect();
+    const artistIdentitySel = document.getElementById('artistIdentity');
+    if (artistIdentitySel) artistIdentitySel.value = newIdentity;
+    const artistIdInput = document.getElementById('artistId');
+    if (artistIdInput) artistIdInput.value = newArtistName;
+
+    // 刷新权限、平台、定金预设
+    if (typeof renderPermissionList === 'function') renderPermissionList();
+    if (typeof syncPermissionsToMain === 'function') syncPermissionsToMain();
+    if (typeof renderSetPlatformSelect === 'function') renderSetPlatformSelect();
+    if (typeof syncPlatformsToMain === 'function') syncPlatformsToMain();
+    
+    if (typeof getDepositPreset === 'function') {
+      const dp = getDepositPreset();
+      if (document.getElementById('setDepositMode')) document.getElementById('setDepositMode').value = dp.mode;
+      if (document.getElementById('setDeposit')) document.getElementById('setDeposit').value = dp.value;
+      if (document.getElementById('depositMode')) document.getElementById('depositMode').value = dp.mode;
+      if (document.getElementById('deposit')) document.getElementById('deposit').value = dp.value;
+      if (typeof updateSetDepositUnit === 'function') updateSetDepositUnit();
+      if (typeof updateDepositUnit === 'function') updateDepositUnit();
+    }
+
+    // 刷新小票外观与价目表
+    if (typeof applyReceiptSettings === 'function') applyReceiptSettings();
+    if (typeof renderPriceListSettingsForm === 'function') renderPriceListSettingsForm();
+    if (typeof renderPriceListPreview === 'function') renderPriceListPreview();
+
+    if (document.getElementById('pageAccount').classList.contains('active')) {
+      checkUserSession();
+    }
+  });
+}
+
+/* ══════════ 对外按钮（带确认框的手动同步） ══════════ */
+async function doCoverCloud() {
+  if (!currentUser) return alert('请先登录！');
+  if (!confirm('⚠️ 警告：这会把本机的所有数据（订单、单主、设置）覆盖云端。\n\n确定继续吗？')) return;
+  await doCoverCloudInternal();
+  showPage('pageAccount');
+}
+
+async function doCoverLocal() {
+  if (!currentUser) return alert('请先登录！');
+  if (!confirm('⚠️ 警告：这会把云端的数据拉到本机，并且覆盖本机所有当前数据。\n\n确定继续吗？')) return;
+  await doCoverLocalInternal();
+  showPage('pageAccount');
+}
+
+async function doDataMerge(silent) {
+  if (!currentUser) return alert('请先登录！');
+  if (!silent && !confirm('⚠️ 数据合并会把云端和本机数据按时间戳合并，可能出现少量冲突。\n\n确定继续吗？')) return;
+  if (!silent) showToast('数据合并功能将在后续版本升级。当前操作将执行“从云端拉取最新数据”。', 4000);
+  await doCoverLocalInternal();
+}
+
+/* ══════════ 弹窗、登录、注册、退出相关 ══════════ */
+function showToast(msg, duration = 5000) {
+  let toast = document.getElementById('app-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.style.cssText = 'position:fixed; top:30px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.82); color:#fff; padding:12px 24px; border-radius:8px; z-index:99999; transition:opacity 0.5s; font-size:14.5px; box-shadow:0 6px 16px rgba(0,0,0,0.2); pointer-events:none; max-width:80vw; text-align:center;';
+    document.body.appendChild(toast);
+  }
+  toast.innerHTML = msg;
+  toast.style.opacity = '1';
+  if (toast.timeout) clearTimeout(toast.timeout);
+  toast.timeout = setTimeout(() => { toast.style.opacity = '0'; }, duration);
+}
+
+function openAuthModal(mode) {
+  window.__authMode = mode;
+  const modalHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeAuthModal()">
+      <div class="modal" style="max-width: 400px;" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3 id="authModalTitle">${mode === 'login' ? '登录' : '注册'}</h3>
+          <button class="icon-btn" onclick="closeAuthModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="authModalError" style="color: var(--red); font-size: 13px; margin-bottom: 10px; min-height: 20px;"></div>
+          <label>邮箱</label>
+          <input type="email" id="authEmail" placeholder="填写邮箱" />
+          <label>密码（至少6位）</label>
+          <input type="password" id="authPassword" placeholder="填写密码" />
+          <div class="actions" style="justify-content:center; margin-top:24px;">
+            <button class="action-btn" style="width:100%;" id="authSubmitBtn" onclick="submitAuthForm()">${mode === 'login' ? '登 录' : '注 册'}</button>
+          </div>
+          <div style="display:flex; justify-content:space-between; margin-top:20px; font-size:12.5px; color:var(--ink-soft);">
+            <span id="authForgotBtn" style="cursor:pointer; text-decoration:underline; ${mode === 'register' ? 'display:none;' : ''}" onclick="showForgotPasswordModal()">找回密码</span>
+            <span id="authSwitchBtn" style="cursor:pointer; text-decoration:underline;" onclick="switchAuthMode()">
+              ${mode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').innerHTML = modalHTML;
+  setTimeout(() => { document.getElementById('authEmail').focus(); }, 100);
+}
+
+function closeAuthModal() { document.getElementById('modalRoot').innerHTML = ''; }
+
+function switchAuthMode() {
+  if (window.__authMode === 'login') openAuthModal('register');
+  else openAuthModal('login');
+}
+
+function showAuthError(msg) { document.getElementById('authModalError').innerText = msg; }
+
+/* ══════════ 核心验证与提交逻辑 ══════════ */
+async function submitAuthForm() {
+  if (!initCloud()) return;
+  const email = document.getElementById('authEmail').value.trim();
+  const password = document.getElementById('authPassword').value;
+
+  if (!email || !password) { showAuthError('邮箱和密码不能为空！'); return; }
+  if (password.length < 6) { showAuthError('密码不能少于 6 位！'); return; }
+
+  const mode = window.__authMode;
+  const btn = document.getElementById('authSubmitBtn');
+  btn.disabled = true;
+  btn.innerText = mode === 'login' ? '登录中...' : '注册中...';
+  showAuthError('');
+
+  try {
+    if (mode === 'login') {
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        if (error.message.indexOf('Invalid login credentials') > -1) showAuthError('该账号未注册，请先注册！');
+        else showAuthError('登录失败：' + error.message);
+      } else {
+        closeAuthModal(); 
+        showToast('登录成功！');
+        await checkUserSession();
+        // ★ 核心修复：登录成功后，立即执行静默检查并拉取，不再用 setTimeout 延迟！
+        await handlePostLoginSync();
+      }
+    } else {
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) {
+        if (error.message.indexOf('User already registered') > -1) showAuthError('该账号已注册，请直接登录！');
+        else showAuthError('注册失败：' + error.message);
+      } else {
+        if (data.session) {
+          closeAuthModal(); 
+          showToast('注册成功！已自动登录。');
+          await checkUserSession();
+          // ★ 核心修复：注册成功后，立即执行静默检查并拉取！
+          await handlePostLoginSync();
+        } else showAuthError('该账号已注册，请直接登录！');
+      }
+    }
+  } catch (err) {
+    showAuthError('网络请求失败，请检查网络！'); console.error('注册/登录异常：', err);
+  } finally {
+    btn.disabled = false;
+    btn.innerText = mode === 'login' ? '登 录' : '注 册';
+  }
+}
+
+/* ══════════ 登录后的智能同步逻辑（极简静默版） ══════════ */
+async function handlePostLoginSync() {
+  showToast('正在检查云端数据...', 2000);
+  
+  let cloudData = null;
+  let retries = 0;
+  
+  // 最多重试6次（等待3秒），解决 Supabase 登录状态延迟导致的自动拉取失败！
+  while (!cloudData && retries < 6) {
+    const { data, error } = await supabaseClient.from('user_data').select('id').limit(1).maybeSingle();
+    if (data) {
+      cloudData = data;
+      break;
+    }
+    await new Promise(r => setTimeout(r, 500)); // 等500毫秒再试
+    retries++;
+  }
+
+  if (cloudData) {
+    // 找到云端数据，直接静默拉取，不弹框！
+    showToast('正在从云端同步数据到本机...', 3000);
+    await doCoverLocalInternal();
+  } else {
+    // 等了三秒还没数据，说明是全新用户
+    if (confirm('检测到您是本机首次登录，是否将本机当前数据上传到云端备份？\n\n选择“取消”则仅登录，不上传。')) {
+      await doCoverCloudInternal();
+    } else {
+      showToast('已跳过数据上传。数据仅保存在本机。', 3000);
+    }
+  }
+}
+
+async function doAccountLogout() {
+  if (!confirm('确定要退出登录吗？退出后数据仍会保留在本机。')) return;
+  await supabaseClient.auth.signOut();
+  showToast('已退出登录', 3000);
+  await checkUserSession();
+}
+
+function showAccountLogin() { openAuthModal('login'); }
+function hideAccountLogin() {}
+
+/* ══════════ 找回密码功能 ══════════ */
+function showForgotPasswordModal() {
+  const modalHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeForgotModal()">
+      <div class="modal" style="max-width: 400px;" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>找回密码</h3>
+          <button class="icon-btn" onclick="closeForgotModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div id="forgotModalError" style="color: var(--red); font-size: 13px; margin-bottom: 10px; min-height: 20px;"></div>
+          <p style="font-size: 13px; color: var(--ink-soft); margin-bottom: 14px;">
+            请输入您注册时的邮箱，我们将向该邮箱发送重置密码的链接。<br>
+            <strong>注意：如果收不到，请查看垃圾箱，或者重新注册新账号。</strong>
+          </p>
+          <label>邮箱</label>
+          <input type="email" id="forgotEmail" placeholder="填写注册邮箱" />
+          <div class="actions" style="justify-content:center; margin-top:24px;">
+            <button class="action-btn" style="width:100%;" id="forgotSubmitBtn" onclick="submitForgotPassword()">发送重置链接</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').innerHTML = modalHTML;
+  setTimeout(() => { document.getElementById('forgotEmail').focus(); }, 100);
+}
+
+function closeForgotModal() { document.getElementById('modalRoot').innerHTML = ''; }
+
+async function submitForgotPassword() {
+  if (!initCloud()) return;
+  const email = document.getElementById('forgotEmail').value.trim();
+  if (!email) { document.getElementById('forgotModalError').innerText = '邮箱不能为空！'; return; }
+
+  const btn = document.getElementById('forgotSubmitBtn');
+  btn.disabled = true; btn.innerText = '发送中...';
+
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname,
+  });
+
+  btn.disabled = false; btn.innerText = '发送重置链接';
+
+  if (error) document.getElementById('forgotModalError').innerText = '发送失败：' + error.message;
+  else {
+    document.getElementById('forgotModalError').style.color = 'green';
+    document.getElementById('forgotModalError').innerText = '发送成功！请去邮箱（含垃圾箱）查看重置链接。';
+    showToast('邮件已发送，请查收！', 5000);
+  }
+}
+/* ═══════════════════════════════════════════════════════
+   [多设备无缝同步] 页面激活时自动拉取云端最新数据
+   ═══════════════════════════════════════════════════════ */
+
+async function checkAndSyncOnLoad() {
+  if (!initCloud()) return;
+  // 检查是否处于已登录状态
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    // 页面载入或切回时，静默拉取云端最新数据
+    // 注意：这里直接调 doCoverLocalInternal，不会弹框，不会打扰用户
+    await doCoverLocalInternal();
+  }
+}
+
+// 场景1：用户直接打开网页（包含自动登录状态）
+window.addEventListener('load', () => {
+  // 延迟 1 秒执行，确保主项目所有的 render 函数已经初始化完毕
+  setTimeout(checkAndSyncOnLoad, 1000);
+});
+
+// 场景2：用户从别的 APP 切回浏览器（手机端极其常见）
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    checkAndSyncOnLoad();
+  }
+});
+
+// 场景3：用户按 F5 刷新页面（浏览器级别刷新）
+window.addEventListener('focus', () => {
+  // 避免频繁触发，加一个简单的防抖
+  if (window.__focusSyncTimer) clearTimeout(window.__focusSyncTimer);
+  window.__focusSyncTimer = setTimeout(() => {
+    checkAndSyncOnLoad();
+  }, 2000);
+});
+/* ═══════════════════════════════════════════════════════
+   [图片清理机制] 删除素材图和要求图，释放云端空间
+   ═══════════════════════════════════════════════════════ */
+async function cleanupOrderImages(todo) {
+  if (!todo) return;
+  try {
+    // 清理素材图和要求图
+    const kinds = ['materials', 'requirements'];
+    for (const kind of kinds) {
+      const arr = todo[kind] || [];
+      for (const f of arr) {
+        if (!f) continue;
+        const ref = f.fileRef || f.dataUrl || '';
+        if (ref) {
+          try { await deleteImageRef(ref); } catch (e) {}
+        }
+      }
+      todo[kind] = []; // 清空数组
+    }
+    console.log('已清理订单素材/要求图片:', todo.id || todo.todoId);
+  } catch (e) {
+    console.warn('清理订单图片失败', e);
+  }
+}
+/* ═══════════════════════════════════════════════════════
+   [基础信息页] 编辑 / 保存 / 防丢失拦截
+   ═══════════════════════════════════════════════════════ */
+
+let __basicSettingEditMode = false;
+let __basicSettingSnapshot = null;
+
+function takeBasicSettingSnapshot() {
+  return {
+    identity: $('setIdentity') ? $('setIdentity').value : '',
+    name: $('setName') ? $('setName').value : '',
+    platform: $('setPlatform') ? $('setPlatform').value : '',
+    depositMode: $('setDepositMode') ? $('setDepositMode').value : '',
+    deposit: $('setDeposit') ? $('setDeposit').value : '',
+  };
+}
+
+function isBasicSettingDirty() {
+  if (!__basicSettingSnapshot) return false;
+  const cur = takeBasicSettingSnapshot();
+  const old = __basicSettingSnapshot;
+  return cur.identity !== old.identity || cur.name !== old.name || 
+         cur.platform !== old.platform || cur.depositMode !== old.depositMode || 
+         cur.deposit !== old.deposit;
+}
+
+function toggleBasicSettingEdit() {
+  __basicSettingEditMode = true;
+  __basicSettingSnapshot = takeBasicSettingSnapshot();
+  
+  // 开启编辑
+  ['setIdentity', 'setName', 'setPlatform', 'setDepositMode', 'setDeposit'].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = false;
+  });
+  
+  // 重新渲染列表，让删除按钮显示出来
+  if (typeof renderIdentityList === 'function') renderIdentityList();
+  if (typeof renderPermissionList === 'function') renderPermissionList();
+
+  document.getElementById('basicSettingEditBtn').style.display = 'none';
+  document.getElementById('basicSettingSaveBtn').style.display = 'block';
+  showToast('已进入编辑模式，修改后请点保存', 3000);
+}
+
+async function saveBasicSetting() {
+  if (!__basicSettingEditMode) return;
+  __basicSettingEditMode = false;
+
+  // 1. 同步到主页（你原本的逻辑）
+  if (typeof syncMainFromSettings === 'function') syncMainFromSettings();
+  if (typeof syncPermissionsToMain === 'function') syncPermissionsToMain();
+  if (typeof syncPlatformsToMain === 'function') syncPlatformsToMain();
+  if (typeof syncDepositFromSettings === 'function') syncDepositFromSettings();
+
+  // 2. ★ 手动触发一次云端同步
+  if (typeof currentUser !== 'undefined' && currentUser && typeof doCoverCloudInternal === 'function') {
+    await doCoverCloudInternal();
+  }
+
+  // 3. 关闭编辑模式
+  ['setIdentity', 'setName', 'setPlatform', 'setDepositMode', 'setDeposit'].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = true;
+  });
+  if (typeof renderIdentityList === 'function') renderIdentityList();
+  if (typeof renderPermissionList === 'function') renderPermissionList();
+  __basicSettingSnapshot = null;
+
+  document.getElementById('basicSettingEditBtn').style.display = 'block';
+  document.getElementById('basicSettingSaveBtn').style.display = 'none';
+  showToast('✅ 基础信息已保存并同步', 3000);
+}
+
+function backFromBasicSetting() {
+  if (__basicSettingEditMode && isBasicSettingDirty()) {
+    // 弹窗询问
+    $('modalRoot').innerHTML = `
+      <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-head"><h3>未保存的修改</h3><button class="icon-btn" onclick="closeModal()">×</button></div>
+          <div class="modal-body">
+            <p style="margin:8px 0;line-height:1.7;">检测到编辑内容有改动，要保存吗？</p>
+            <div class="actions" style="justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+              <button class="action-btn ghost" onclick="closeModal()">取消</button>
+              <button class="action-btn ghost" style="border-color:var(--red);color:var(--red);" onclick="confirmBasicSettingDiscard()">放弃修改</button>
+              <button class="action-btn" onclick="confirmBasicSettingSave()">保存并返回</button>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+  exitBasicSettingEdit();
+  showPage('pageSettings');
+}
+
+function exitBasicSettingEdit() {
+  __basicSettingEditMode = false;
+  __basicSettingSnapshot = null;
+  ['setIdentity', 'setName', 'setPlatform', 'setDepositMode', 'setDeposit'].forEach(id => {
+    const el = $(id);
+    if (el) el.disabled = true;
+  });
+  if (typeof renderIdentityList === 'function') renderIdentityList();
+  if (typeof renderPermissionList === 'function') renderPermissionList();
+  
+  const editBtn = document.getElementById('basicSettingEditBtn');
+  const saveBtn = document.getElementById('basicSettingSaveBtn');
+  if (editBtn) editBtn.style.display = 'block';
+  if (saveBtn) saveBtn.style.display = 'none';
+}
+
+function confirmBasicSettingDiscard() {
+  closeModal();
+  exitBasicSettingEdit();
+  showPage('pageSettings');
+}
+
+async function confirmBasicSettingSave() {
+  closeModal();
+  await saveBasicSetting();
+  showPage('pageSettings');
+}
+/* ══════════ 算法公式说明弹窗 ══════════ */
+function showAlgorithmFormulaModal() {
+  const html = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()" style="z-index: 9999;">
+      <div class="modal" style="max-width: 520px; max-height: 85vh;" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>本系统算法公式大全</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body" style="font-size: 13.5px; line-height: 1.8; color: var(--ink);">
+          
+          <p style="color:var(--red); font-weight:600; margin-top:0;">※ 以下为核心计算公式汇总，请结合当前选择的算法理解。</p>
+          
+          <h4 style="margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--line-soft); color: #1a5fcc;">1. 单稿件计算</h4>
+          <ul style="padding-left: 20px; margin: 4px 0;">
+            <li>单稿件原价（单元）= 基础价 + 增项合计</li>
+            <li>单稿件原价（小计）= 单稿件原价（单元）× 数量</li>
+            <li><b>单稿件合计 = 单稿件原价（小计）× 用途比例（权限倍率）</b></li>
+          </ul>
+
+          <h4 style="margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--line-soft); color: #1a5fcc;">2. 组内计算</h4>
+          <ul style="padding-left: 20px; margin: 4px 0;">
+            <li>组原价 = 组内所有稿件「单稿件原价（小计）」之和</li>
+            <li>组小计 = 组内所有稿件「单稿件合计」之和</li>
+            <li>组附加 = 按当前算法设置的基数 × 系数（或固定金额）</li>
+            <li>组折扣 = 按当前算法设置的基数 × 系数（或固定金额）</li>
+            <li><b>组合计 = 组小计 + 组附加 − 组折扣</b></li>
+          </ul>
+
+          <h4 style="margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--line-soft); color: #1a5fcc;">3. 订单级计算</h4>
+          <ul style="padding-left: 20px; margin: 4px 0;">
+            <li>总附加 = 按当前算法设置的基数 × 系数（或固定金额）</li>
+            <li>总折扣 = 按当前算法设置的基数 × 系数（或固定金额）</li>
+            <li><b>订单总价 = 各稿件组合计之和 + 总附加 − 总折扣</b></li>
+          </ul>
+
+          <h4 style="margin: 16px 0 8px; padding-bottom: 4px; border-bottom: 1px dashed var(--line-soft); color: #1a5fcc;">4. 服务费与尾款</h4>
+          <ul style="padding-left: 20px; margin: 4px 0;">
+            <li>服务费 = 按平台规则（画加 / 米画师 / 咸鱼）基数 × 费率</li>
+            <li><b>应付金额（买家付） = 订单总价 + 服务费</b></li>
+            <li><b>待结尾款（用户收） = 应付金额 − 预付款 − 服务费</b></li>
+          </ul>
+          <p style="font-size: 12px; color: var(--ink-soft); margin-top: 10px;">
+            （注：服务费是平台收取的，不计入用户实收，算尾款时需扣除。）
+          </p>
+
+          <div style="margin-top: 24px; padding: 12px 14px; background: #f0f6ff; border-radius: 6px; font-size: 12.5px; color: #1a5fcc; line-height: 1.7;">
+            <strong>💡 提示：</strong>更多高级公式和详细示例，请到首页右上角<b>第一个菜单按钮（工具箱）</strong></b>里的<b>「用户手册」</b>查看。
+          </div>
+
+          <div class="actions" style="justify-content:flex-end; margin-top: 18px;">
+            <button class="action-btn" onclick="closeModal()">我知道了</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById('modalRoot').innerHTML = html;
 }

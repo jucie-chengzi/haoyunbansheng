@@ -729,8 +729,11 @@ button.action-btn:hover { opacity: 0.86; }
   position: absolute; top: 0; left: 0;
   display: none; cursor: pointer;
   user-select: none; -webkit-user-select: none;
-  touch-action: none; pointer-events: auto;
+  touch-action: none; pointer-events: none; /* 默认不响应触摸事件 */
   object-fit: fill;
+}
+.receipt-bg-wrap.receipt-img-edit-active .receipt-bg-img {
+  pointer-events: auto; /* 只有在编辑状态下，背景图才响应拖动 */
 }
 .receipt-bg-wrap.receipt-img-edit-active .receipt-bg-img { cursor: move; }
 .receipt-bg-wrap .receipt-bg-img:active { cursor: grabbing; }
@@ -755,10 +758,13 @@ button.action-btn:hover { opacity: 0.86; }
 .receipt-img-block > img {
   position: absolute; top: 0; left: 0;
   width: 100%; height: auto;
-  pointer-events: auto;
+  pointer-events: none; /* 默认不响应触摸事件，让手指滑动生效 */
   -webkit-user-drag: none; user-select: none;
   object-fit: fill;
   cursor: pointer;
+}
+.receipt-img-block.receipt-img-edit-active > img {
+  pointer-events: auto; /* 只有在编辑状态下，图片才响应拖动 */
 }
 .receipt-img-block.receipt-img-edit-active > img { cursor: move; }
 
@@ -9233,4 +9239,61 @@ body.is-preset-dragging {
     font-size: 0.8em;
     padding-left: 0.6em;
   }
+}
+/* ══════════ [CSS-50] 账号按钮（第5个）专属配色 ══════════ */
+
+/* 朱汐沧澜主题：给第5个按钮上朱红色 */
+:root[data-theme="zhuxi"] .home-top-actions .home-tool-btn:nth-child(5) {
+  color: #ffffff;
+  background: var(--zx-red);
+}
+
+/* 芭乐本乐主题：给第5个按钮上紫色 */
+:root[data-theme="guava"] .home-top-actions .home-tool-btn:nth-child(5) {
+  color: #ffffff;
+  background: var(--m); /* 紫色，用来和前面的粉/绿/黄区分开 */
+}
+/* ══════════ [CSS-51] 账号与同步 · 按钮主题适配 ══════════ */
+
+/* 1. 默认经典黑白主题：全部统一为深色线条 */
+.cloud-sync-actions .action-btn.ghost,
+.manual-sync-actions .action-btn.ghost {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* 2. 朱汐沧澜主题（跳色）：云端同步使用【沧澜蓝】，手动同步使用【朱红】 */
+:root[data-theme="zhuxi"] .cloud-sync-actions .action-btn.ghost {
+  border-color: var(--zx-blue);
+  color: var(--zx-blue);
+}
+:root[data-theme="zhuxi"] .cloud-sync-actions .action-btn.ghost:hover {
+  background: var(--zx-blue-soft);
+}
+:root[data-theme="zhuxi"] .manual-sync-actions .action-btn.ghost {
+  border-color: var(--zx-red);
+  color: var(--zx-red);
+}
+:root[data-theme="zhuxi"] .manual-sync-actions .action-btn.ghost:hover {
+  background: var(--zx-red-soft);
+}
+
+/* 3. 云朵芝士主题：云端用天蓝，手动用灰蓝 */
+:root[data-theme="cute-ins"] .cloud-sync-actions .action-btn.ghost {
+  border-color: var(--theme-primary);
+  color: var(--theme-primary-deep);
+}
+:root[data-theme="cute-ins"] .manual-sync-actions .action-btn.ghost {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent-deep);
+}
+
+/* 4. 芭乐本乐主题：云端用绿，手动用粉 */
+:root[data-theme="guava"] .cloud-sync-actions .action-btn.ghost {
+  border-color: var(--g);
+  color: var(--g-deep);
+}
+:root[data-theme="guava"] .manual-sync-actions .action-btn.ghost {
+  border-color: var(--p);
+  color: var(--p-deep);
 }
