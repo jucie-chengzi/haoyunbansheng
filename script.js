@@ -7135,6 +7135,7 @@ function captureReceiptFormSnapshot() {
   });
 
   return {
+    client:       $('client')       ? $('client').value       : '',  // ★ 新增：单主ID
     orderDate:    $('orderDate')    ? $('orderDate').value    : '',
     scheduleDate: $('scheduleDate') ? $('scheduleDate').value : '',
     workDays:     $('workDays')     ? $('workDays').value     : '',
@@ -7168,6 +7169,7 @@ function restoreReceiptFormSnapshot(snap) {
   if (!snap) return;
 
   /* 基础信息 */
+  if ($('client'))       $('client').value       = snap.client       || '';  // ★ 新增：恢复单主ID
   if ($('orderDate'))    $('orderDate').value    = snap.orderDate    || '';
   if ($('scheduleDate')) $('scheduleDate').value = snap.scheduleDate || '';
   if ($('workDays'))     $('workDays').value     = snap.workDays     || '';
@@ -8748,6 +8750,15 @@ async function generateFinalReceipt(todo, settleState) {
     if (todo.receiptSnapshot) {
       restoreReceiptFormSnapshot(todo.receiptSnapshot);
     }
+
+    // ★ 核心修复：强制用订单的真实数据覆盖页面，彻底杜绝残留污染
+    if ($('client'))       $('client').value       = todo.clientId || '';
+    if ($('orderDate'))    $('orderDate').value    = todo.orderDate || '';
+    if ($('scheduleDate')) $('scheduleDate').value = todo.scheduleDate || '';
+    if ($('deadline'))     $('deadline').value     = todo.deadline || '';
+    window.__currentOrderNo = todo.orderNo || '';  // 锁定正确的订单编号
+    window.__editingTodoId = todo.id;              // 锁定正确的订单ID
+
     const layout = $('receiptLayout');
     if (layout) layout.classList.remove('settings-open');
 
