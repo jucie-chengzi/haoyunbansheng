@@ -1,4 +1,4 @@
-const CACHE = 'haoyunbansheng-v4';
+const CACHE = 'haoyunbansheng-v5';
 const URLS = [
   './',
   './index.html',
@@ -26,6 +26,11 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
+  // ★ 核心修复：只拦截 GET 请求。POST 请求（如登录、注册）直接放行，不缓存！
+  if (e.request.method !== 'GET') {
+    return;
+  }
+
   e.respondWith(
     fetch(e.request)
       .then(response => {
