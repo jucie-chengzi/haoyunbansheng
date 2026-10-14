@@ -7135,15 +7135,17 @@ function captureReceiptFormSnapshot() {
   });
 
   return {
-    client:       $('client')       ? $('client').value       : '',  // ★ 新增：单主ID
+    // ★ 核心字段：一个都不能少
+    client:       $('client')       ? $('client').value       : '',
+    platform:     $('platform')     ? $('platform').value     : '',
+    artistId:     $('artistId')     ? $('artistId').value     : '',
+    artistIdentity: $('artistIdentity') ? $('artistIdentity').value : '',
     orderDate:    $('orderDate')    ? $('orderDate').value    : '',
     scheduleDate: $('scheduleDate') ? $('scheduleDate').value : '',
     workDays:     $('workDays')     ? $('workDays').value     : '',
     project:      $('project')      ? $('project').value      : '',
     ip:           $('ip')           ? $('ip').value           : '',
     attribute:    $('attribute')    ? $('attribute').value    : '',
-    artistIdentity: $('artistIdentity') ? $('artistIdentity').value : '',
-    artistId:       $('artistId')       ? $('artistId').value       : '',
     character:    $('character')    ? $('character').value    : '',
     depositMode:  $('depositMode')  ? $('depositMode').value  : 'percent',
     deposit:      $('deposit')      ? $('deposit').value      : '20',
@@ -7168,36 +7170,28 @@ function captureReceiptFormSnapshot() {
 function restoreReceiptFormSnapshot(snap) {
   if (!snap) return;
 
-  /* 基础信息 */
-  if ($('client'))       $('client').value       = snap.client       || '';  // ★ 新增：恢复单主ID
+  // ★ 基础信息全面恢复
+  if ($('client'))       $('client').value       = snap.client       || '';
+  if ($('platform'))     $('platform').value     = snap.platform     || '';
+  if ($('artistId'))     $('artistId').value     = snap.artistId     || getSavedArtistName();
+  if ($('artistIdentity')) $('artistIdentity').value = snap.artistIdentity || getDefaultIdentity();
   if ($('orderDate'))    $('orderDate').value    = snap.orderDate    || '';
   if ($('scheduleDate')) $('scheduleDate').value = snap.scheduleDate || '';
   if ($('workDays'))     $('workDays').value     = snap.workDays     || '';
   if ($('project'))      $('project').value      = snap.project      || '';
   if ($('ip'))           $('ip').value           = snap.ip           || '';
   if ($('attribute'))    $('attribute').value    = snap.attribute    || '';
-
-  /* 画师/美工（老订单快照没有这两个字段 → 回退到设置里的值） */
-  if ($('artistIdentity')) {
-    $('artistIdentity').value = snap.artistIdentity || getDefaultIdentity();
-  }
-  if ($('artistId')) {
-    $('artistId').value = snap.artistId || getSavedArtistName();
-  }
   if ($('character'))    $('character').value    = snap.character    || '';
   if ($('depositMode'))  $('depositMode').value  = snap.depositMode  || 'percent';
   if ($('deposit'))      $('deposit').value      = (snap.deposit !== undefined && snap.deposit !== '') ? snap.deposit : '20';
   if ($('placeholderToggle')) $('placeholderToggle').checked = !!snap.placeholder;
+  
   updateDepositUnit();
 
-  if (typeof setDepositModeLocked === 'function') {
-    setDepositModeLocked(!!snap.placeholder);
-  }
-  if (typeof applyPlaceholderMode === 'function') {
-    applyPlaceholderMode(!!snap.placeholder);
-  }
+  if (typeof setDepositModeLocked === 'function') setDepositModeLocked(!!snap.placeholder);
+  if (typeof applyPlaceholderMode === 'function') applyPlaceholderMode(!!snap.placeholder);
 
-  /* 稿件组 */
+  // 稿件组
   const gContainer = $('groupsContainer');
   if (gContainer) gContainer.innerHTML = '';
 
@@ -7236,7 +7230,6 @@ function restoreReceiptFormSnapshot(snap) {
     (g.extras || []).forEach(ex => addGroupExtra(gb, ex));
     (g.discounts || []).forEach(dc => addGroupDiscount(gb, dc));
 
-    /* 恢复组服务费 */
     if (g.serviceFee) {
       gb.dataset.serviceFee = JSON.stringify(g.serviceFee);
     } else {
@@ -7245,7 +7238,7 @@ function restoreReceiptFormSnapshot(snap) {
     if (typeof updateGroupServiceDisplay === 'function') updateGroupServiceDisplay(gb);
   });
 
-  /* 订单级附加 / 优惠 / 赠品 */
+  // 订单级附加 / 优惠 / 赠品
   const ec = $('extrasContainer');
   if (ec) ec.innerHTML = '';
   (snap.extras || []).forEach(ex => addExtra(ex));
@@ -7267,7 +7260,7 @@ function restoreReceiptFormSnapshot(snap) {
     if (gvEl) gvEl.value = g.value || '';
   });
 
-  /* 预览图 */
+  // 预览图
   const ref = snap.previewImage || '';
   previewImageData = ref;
 
@@ -7283,17 +7276,17 @@ function restoreReceiptFormSnapshot(snap) {
     if ($('previewBox')) $('previewBox').classList.remove('show');
   }
 
-  /* 标签 */
+  // 标签
   window.__receiptTags = (snap.receiptTags || []).slice();
   updateReceiptTagBtn();
 
-  /* 定金开关 */
+  // 定金开关
   if ($('depositEnabled')) {
     $('depositEnabled').checked = (snap.depositEnabled === undefined) ? true : !!snap.depositEnabled;
   }
   if (typeof updateDepositInputDisabled === 'function') updateDepositInputDisabled();
 
-  /* 预付配置 */
+  // 预付配置
   if (snap.prepaidConfig) {
     setPrepaidConfig(JSON.parse(JSON.stringify(snap.prepaidConfig)));
   } else {
@@ -7301,7 +7294,7 @@ function restoreReceiptFormSnapshot(snap) {
   }
   if (typeof updatePrepaidBtnState === 'function') updatePrepaidBtnState();
 
-  /* 订单级服务费 */
+  // 订单级服务费
   if (snap.orderServiceFee) {
     setOrderServiceFeeConfig(JSON.parse(JSON.stringify(snap.orderServiceFee)));
   } else {
@@ -8672,18 +8665,23 @@ async function confirmFinalSettle() {
     t.receiptImage = finalReceiptRef; // 更新为最新
   }
 
-  /* 记尾款流水（负尾款 → 退款流水） */
-  if (s.finalAmount > 0) {
-    addFlow('final', s.finalAmount, '尾款 · ' + (t.clientName || '未命名'), today, {
-      todoId: t.id,
-      completedId: completed.id,
-    });
-  } else if (s.finalAmount < 0) {
-    addFlow('refund', Math.abs(s.finalAmount), '结单退款 · ' + (t.clientName || '未命名'), today, {
-      todoId: t.id,
-      completedId: completed.id,
-    });
-  }
+      /* ★ 核心修复：把预付款和尾款合并成一条“总实收”流水，彻底杜绝统计遗漏 */
+    // 1. 先删除该订单之前残留的预付款和排单费流水
+    removeFlowsByTodoIdAndType(t.id, 'prepaid');
+    removeFlowsByTodoIdAndType(t.id, 'dispatch');
+
+    // 2. 写入一条包含总实收的流水（总实收 = 预付款 + 尾款）
+    if (s.totalReceived > 0) {
+      addFlow('final', s.totalReceived, '实收（预付款+尾款） · ' + (t.clientName || '未命名'), today, {
+        todoId: t.id,
+        completedId: completed.id,
+      });
+    } else if (s.totalReceived < 0) {
+      addFlow('refund', Math.abs(s.totalReceived), '结单退款 · ' + (t.clientName || '未命名'), today, {
+        todoId: t.id,
+        completedId: completed.id,
+      });
+    }
 
   /* ★ 新增：清理该订单的素材和要求图片（释放云端空间） */
   cleanupOrderImages(t).catch(e => console.warn(e));
@@ -8751,19 +8749,38 @@ async function generateFinalReceipt(todo, settleState) {
       restoreReceiptFormSnapshot(todo.receiptSnapshot);
     }
 
-    // ★ 核心修复：强制用订单的真实数据覆盖页面，彻底杜绝残留污染
-    if ($('client'))       $('client').value       = todo.clientId || '';
-    if ($('orderDate'))    $('orderDate').value    = todo.orderDate || '';
-    if ($('scheduleDate')) $('scheduleDate').value = todo.scheduleDate || '';
-    if ($('deadline'))     $('deadline').value     = todo.deadline || '';
-    window.__currentOrderNo = todo.orderNo || '';  // 锁定正确的订单编号
-    window.__editingTodoId = todo.id;              // 锁定正确的订单ID
+    // ★ 终极锁死：把订单的真实数据逐个覆盖，绝不让小票页残留数据污染结单小票
+    if ($('client'))         $('client').value         = todo.clientId || '';
+    if ($('artistId'))       $('artistId').value       = (todo.receiptSnapshot && todo.receiptSnapshot.artistId) || todo.artistId || getSavedArtistName();
+    if ($('artistIdentity')) $('artistIdentity').value = (todo.receiptSnapshot && todo.receiptSnapshot.artistIdentity) || getDefaultIdentity();
+    if ($('platform'))       $('platform').value       = todo.platform || '';
+    if ($('orderDate'))      $('orderDate').value      = todo.orderDate || '';
+    if ($('scheduleDate'))   $('scheduleDate').value   = todo.scheduleDate || '';
+    if ($('deadline'))       $('deadline').value       = todo.deadline || '';
+    
+    // ★ 锁定编号：确保结单小票的编号和订单编号完全一致，不被页面残留重新生成
+    window.__currentOrderNo = todo.orderNo || makeOrderNo(todo.orderDate);
+    window.__editingTodoId = todo.id;
 
     const layout = $('receiptLayout');
     if (layout) layout.classList.remove('settings-open');
 
     /* 2. 调 generate 让 DOM 与数据同步 */
     try { generate(); } catch (e) { console.warn('generate 失败', e); }
+        // ★ 核心修复：在 generate() 执行之后修改，就不会被覆盖了！
+    let deadlineValueEl = $('outDeadline');
+    if (deadlineValueEl) {
+      const parentRow = deadlineValueEl.closest('div');
+      if (parentRow) {
+        const spans = parentRow.querySelectorAll('span');
+        if (spans.length >= 2) {
+          if (spans[0].textContent.indexOf('截稿日期') > -1) {
+            spans[0].textContent = '交稿日期';
+          }
+        }
+      }
+      deadlineValueEl.textContent = fmtDateStr(new Date());
+    }
 
     /* 3. 等一帧 */
     await new Promise(r => requestAnimationFrame(r));
@@ -8877,6 +8894,23 @@ async function generateFinalReceipt(todo, settleState) {
       restoreReceiptFormSnapshot(backupSnap);
       window.__editingTodoId = backupEditingId;
       window.__currentOrderNo = backupOrderNo;
+
+      // ★ 恢复：“交稿日期”改回“截稿日期”
+      let deadlineLabelEl = null;
+      let deadlineValueEl = $('outDeadline');
+      if (deadlineValueEl) {
+        const parentRow = deadlineValueEl.closest('div');
+        if (parentRow) {
+          const spans = parentRow.querySelectorAll('span');
+          if (spans.length >= 2) {
+            deadlineLabelEl = spans[0];
+            if (deadlineLabelEl.textContent.indexOf('交稿日期') > -1) {
+              deadlineLabelEl.textContent = '截稿日期';
+            }
+          }
+        }
+      }
+
       try { generate(); } catch (e) {}
     } catch (e) {}
 
@@ -24642,6 +24676,9 @@ function finalizeFontDot() {
   /* 2. 自动迁移老数据 */
   await autoMigrateOnStartup();
 
+  /* ★ 新增：自动修复所有用户的历史实收流水（修复完会自动停止，绝不重复跑） */
+  autoFixHistoricalFlows();
+
   /* 3. 初始化排单 / 统计 */
   initScheduleModule();
   initStatsModule();
@@ -25529,4 +25566,62 @@ function showAlgorithmFormulaModal() {
     </div>
   `;
   document.getElementById('modalRoot').innerHTML = html;
+}
+/* ═══════════════════════════════════════════════════════
+   [数据修复] 自动修复历史订单的实收流水
+   ═══════════════════════════════════════════════════════ */
+function autoFixHistoricalFlows() {
+  // 1. 检查是否已经修复过，每个浏览器只需跑一次，防止重复修复
+  if (localStorage.getItem('listReceiptFlowFixVersion') === 'v2') return;
+  
+  const completed = getCompleted();
+  let flows = getFlows();
+  let fixedCount = 0;
+
+  completed.forEach(c => {
+    const totalReceived = Number(c.totalReceived) || 0;
+    if (totalReceived <= 0) return;
+
+    // 查询这个订单目前的流水，判断是否需要修复
+    const related = flows.filter(f => f.completedId === c.id);
+    const finalFlows = related.filter(f => f.type === 'final');
+
+    let needsFix = false;
+    // 如果没有最终实收流水，或者金额对不上，就判定为需要修复
+    if (finalFlows.length !== 1) {
+      needsFix = true;
+    } else if (Math.abs(Number(finalFlows[0].amount) - totalReceived) > 0.01) {
+      needsFix = true;
+    }
+
+    if (needsFix) {
+      // 删掉该订单所有旧的错误流水（尾款、预付款、排班费等错误记录）
+      flows = flows.filter(f => f.completedId !== c.id);
+
+      // 重新生成一条正确的总实收流水
+      flows.push({
+        id: makeFlowId(),
+        type: 'final',
+        amount: totalReceived,
+        note: '实收（预付款+尾款） · ' + (c.clientName || '未命名') + ' [系统自动修复]',
+        date: c.completedDate || fmtDateStr(new Date()),
+        todoId: c.todoId || '',
+        completedId: c.id,
+        cancelledId: '',
+        discardedId: '',
+        createdAt: Date.now()
+      });
+      fixedCount++;
+    }
+  });
+
+  if (fixedCount > 0) {
+    setFlows(flows);
+    console.log('✅ 系统已自动修复 ' + fixedCount + ' 条历史订单的实收流水。');
+    // 刷新统计页面（如果当前在统计页，立刻生效）
+    if (typeof renderStatsPage === 'function') renderStatsPage();
+  }
+  
+  // 标记已修复，以后不再重复执行
+  localStorage.setItem('listReceiptFlowFixVersion', 'v2');
 }
