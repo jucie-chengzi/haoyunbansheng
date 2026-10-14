@@ -25128,7 +25128,10 @@ async function submitAuthForm() {
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
 
-  if (!email || !password) { showAuthError('邮箱和密码不能为空！'); return; }
+  // 1. 明确的输入拦截提示，不让用户以为是网络问题
+  if (!email) { showAuthError('请填写邮箱！'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showAuthError('邮箱格式不正确！'); return; }
+  if (!password) { showAuthError('请填写密码！'); return; }
   if (password.length < 6) { showAuthError('密码不能少于 6 位！'); return; }
 
   const mode = window.__authMode;
@@ -25139,6 +25142,7 @@ async function submitAuthForm() {
 
   try {
     if (mode === 'login') {
+      // ============ 登录逻辑 ============
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) {
         if (error.message.indexOf('Invalid login credentials') > -1) showAuthError('该账号未注册或密码错误，请先注册！');
@@ -25153,24 +25157,16 @@ async function submitAuthForm() {
       const { data, error } = await supabaseClient.auth.signUp({ email, password });
       
       if (error) {
-        if (error.message.indexOf('User already registered') > -1) {
-          showAuthError('该账号已注册，请直接登录！');
-        } else {
-          showAuthError('注册失败：' + error.message);
-        }
+        if (error.message.indexOf('User already registered') > -1) showAuthError('该账号已注册，请直接登录！');
+        else showAuthError('注册失败：' + error.message);
       } else {
-        // ★ 核心修改：判断是否是新用户注册
-        // 如果返回的 user 存在，且没有报错，说明注册成功（因为我们已经关了邮箱验证，此时应该直接有 session）
         if (data.session) {
-          closeAuthModal(); 
-          showToast('注册成功！已自动登录。');
+          closeAuthModal(); showToast('注册成功！已自动登录。');
           await checkUserSession();
           await handlePostLoginSync();
         } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-          // 如果 identities 为空，说明邮箱其实已经存在了，但没验证，Supabase 会伪装成功。
           showAuthError('该邮箱已经注册过了，请直接登录或找回密码！');
         } else {
-          // 极少数情况：关了验证但没给 session
           closeAuthModal();
           alert('注册成功！请使用该邮箱和密码登录。');
           openAuthModal('login');
@@ -25180,6 +25176,7 @@ async function submitAuthForm() {
   } catch (err) {
     showAuthError('网络请求失败，请检查网络！'); console.error('注册/登录异常：', err);
   } finally {
+    // ★ 核心优化：无论成功还是失败，只要请求结束，按钮必须解锁！
     btn.disabled = false;
     btn.innerText = mode === 'login' ? '登 录' : '注 册';
   }
