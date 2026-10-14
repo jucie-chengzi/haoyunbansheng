@@ -25141,28 +25141,40 @@ async function submitAuthForm() {
     if (mode === 'login') {
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) {
-        if (error.message.indexOf('Invalid login credentials') > -1) showAuthError('该账号未注册，请先注册！');
+        if (error.message.indexOf('Invalid login credentials') > -1) showAuthError('该账号未注册或密码错误，请先注册！');
         else showAuthError('登录失败：' + error.message);
       } else {
-        closeAuthModal(); 
-        showToast('登录成功！');
+        closeAuthModal(); showToast('登录成功！');
         await checkUserSession();
-        // ★ 核心修复：登录成功后，立即执行静默检查并拉取，不再用 setTimeout 延迟！
         await handlePostLoginSync();
       }
     } else {
+      // ============ 注册逻辑 ============
       const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      
       if (error) {
-        if (error.message.indexOf('User already registered') > -1) showAuthError('该账号已注册，请直接登录！');
-        else showAuthError('注册失败：' + error.message);
+        if (error.message.indexOf('User already registered') > -1) {
+          showAuthError('该账号已注册，请直接登录！');
+        } else {
+          showAuthError('注册失败：' + error.message);
+        }
       } else {
+        // ★ 核心修改：判断是否是新用户注册
+        // 如果返回的 user 存在，且没有报错，说明注册成功（因为我们已经关了邮箱验证，此时应该直接有 session）
         if (data.session) {
           closeAuthModal(); 
           showToast('注册成功！已自动登录。');
           await checkUserSession();
-          // ★ 核心修复：注册成功后，立即执行静默检查并拉取！
           await handlePostLoginSync();
-        } else showAuthError('该账号已注册，请直接登录！');
+        } else if (data.user && data.user.identities && data.user.identities.length === 0) {
+          // 如果 identities 为空，说明邮箱其实已经存在了，但没验证，Supabase 会伪装成功。
+          showAuthError('该邮箱已经注册过了，请直接登录或找回密码！');
+        } else {
+          // 极少数情况：关了验证但没给 session
+          closeAuthModal();
+          alert('注册成功！请使用该邮箱和密码登录。');
+          openAuthModal('login');
+        }
       }
     }
   } catch (err) {
