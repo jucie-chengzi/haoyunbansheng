@@ -98,12 +98,13 @@
           </svg>
         </button>
         <!-- ★ 账号按钮，放在最后，带云朵图标和强制背景色 -->
-        <button type="button" class="home-tool-btn" onclick="openAccountPage()" title="账号与同步" aria-label="账号与同步">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <button type="button" class="home-tool-btn" onclick="openAccountPage()" title="账号与同步" aria-label="账号与同步" style="flex-direction: column; gap: 2px; height: auto; padding: 4px 0;">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width: 22px; height: 22px;">
             <path d="M17.5 19H6.5C3.5 19 1 16.5 1 13.5C1 10.5 3.5 8 6.5 8C7.5 5 10.5 3 14 3C18 3 21 6 21 10C22 11 23 12.5 23 14C23 16.5 21 18.5 18.5 19H17.5Z" />
             <circle cx="12" cy="11" r="2.5" />
             <path d="M7 18C7 15.5 9 14 12 14C15 14 17 15.5 17 18" />
           </svg>
+          <span style="font-size: 10px; line-height: 1;">登录</span>
         </button>
       </div>
 
@@ -1581,11 +1582,11 @@
         <div class="module" style="grid-template-columns: 1fr 1fr;">
           <div>
             <label>身份</label>
-            <select id="setIdentity" onchange="syncMainFromSettings()"></select>
+            <select id="setIdentity"></select>
           </div>
           <div>
             <label>ID</label>
-            <input id="setName" oninput="syncMainFromSettings()" />
+            <input id="setName" />
           </div>
         </div>
         <p class="setting-hint" id="setIdentityHint">身份通过下方预设增删。</p>
@@ -1605,7 +1606,7 @@
         <div class="module" style="grid-template-columns: 1fr 1fr; margin-top:24px;">
           <div>
             <label style="margin-top:0;">定金预设模式</label>
-            <select id="setDepositMode" onchange="syncDepositFromSettings()">
+            <select id="setDepositMode">
               <option value="percent">百分比 %</option>
               <option value="amount">固定金额 ¥</option>
             </select>
@@ -1613,7 +1614,47 @@
           <div>
             <label style="margin-top:0;">定金预设数值</label>
             <div class="input-unit-wrap suffix" id="setDepositWrap">
-              <input id="setDeposit" type="number" step="0.01" value="20" oninput="syncDepositFromSettings()" />
+              <input id="setDeposit" type="number" step="0.01" value="20" />
+              <span class="input-unit" id="setDepositUnit">%</span>
+            </div>
+          </div>
+        </div>        <div class="module" style="grid-template-columns: 1fr 1fr;">
+          <div>
+            <label>身份</label>
+            <select id="setIdentity"></select>
+          </div>
+          <div>
+            <label>ID</label>
+            <input id="setName" />
+          </div>
+        </div>
+
+        <p class="setting-hint" id="setIdentityHint">身份通过下方预设增删。</p>
+
+        <div style="margin-top:24px;">
+          <label style="margin-top:0;">身份预设（可增删、可改名称）</label>
+          <div id="identityList"></div>
+          <button class="add-item-btn" onclick="openAddIdentityModal()" style="margin-top:6px;">+ 添加身份</button>
+        </div>
+
+        <div style="margin-top:24px;">
+          <label style="margin-top:0;">接单平台（主页默认选中此项）</label>
+          <select id="setPlatform"></select>
+          <p class="setting-hint">下拉最后一项「＋ 添加平台」可打开管理窗口。</p>
+        </div>
+
+        <div class="module" style="grid-template-columns: 1fr 1fr; margin-top:24px;">
+          <div>
+            <label style="margin-top:0;">定金预设模式</label>
+            <select id="setDepositMode">
+              <option value="percent">百分比 %</option>
+              <option value="amount">固定金额 ¥</option>
+            </select>
+          </div>
+          <div>
+            <label style="margin-top:0;">定金预设数值</label>
+            <div class="input-unit-wrap suffix" id="setDepositWrap">
+              <input id="setDeposit" type="number" step="0.01" value="20" />
               <span class="input-unit" id="setDepositUnit">%</span>
             </div>
           </div>

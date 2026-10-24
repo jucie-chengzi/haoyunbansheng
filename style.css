@@ -9297,3 +9297,36 @@ body.is-preset-dragging {
   border-color: var(--p);
   color: var(--p-deep);
 }
+/* ══════════ 密码输入框的小眼睛 ══════════ */
+.password-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.password-input-wrap input {
+  padding-right: 36px !important;
+}
+.password-eye-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-soft);
+  opacity: 0.6;
+  transition: opacity 0.2s;
+}
+.password-eye-btn:hover {
+  opacity: 1;
+}
+.password-eye-btn svg {
+  width: 18px;
+  height: 18px;
+}
