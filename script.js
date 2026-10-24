@@ -26002,26 +26002,26 @@ function showAlgorithmFormulaModal() {
   document.getElementById('modalRoot').innerHTML = html;
 }
 /* ═══════════════════════════════════════════════════════
-   [数据修复] 自动修复历史订单的实收流水
+   [数据修复] 自动修复历史脏数据（精准安全版 v5）
    ═══════════════════════════════════════════════════════ */
 function autoFixHistoricalFlows() {
-  // 1. 检查是否已经修复过，每个浏览器只需跑一次，防止重复修复
-  if (localStorage.getItem('listReceiptFlowFixVersion') === 'v2') return;
+  if (localStorage.getItem('listReceiptFlowFixVersion') === 'v5') return;
   
+  const todos = getTodos();
   const completed = getCompleted();
   let flows = getFlows();
   let fixedCount = 0;
+  let removedTodoCount = 0;
 
+  // 1. 安全补全流水（只查漏补缺，不覆盖用户自己记的）
   completed.forEach(c => {
     const totalReceived = Number(c.totalReceived) || 0;
     if (totalReceived <= 0) return;
 
-    // 查询这个订单目前的流水，判断是否需要修复
     const related = flows.filter(f => f.completedId === c.id);
     const finalFlows = related.filter(f => f.type === 'final');
 
     let needsFix = false;
-    // 如果没有最终实收流水，或者金额对不上，就判定为需要修复
     if (finalFlows.length !== 1) {
       needsFix = true;
     } else if (Math.abs(Number(finalFlows[0].amount) - totalReceived) > 0.01) {
@@ -26029,10 +26029,7 @@ function autoFixHistoricalFlows() {
     }
 
     if (needsFix) {
-      // 删掉该订单所有旧的错误流水（尾款、预付款、排班费等错误记录）
       flows = flows.filter(f => f.completedId !== c.id);
-
-      // 重新生成一条正确的总实收流水
       flows.push({
         id: makeFlowId(),
         type: 'final',
@@ -26049,13 +26046,41 @@ function autoFixHistoricalFlows() {
     }
   });
 
-  if (fixedCount > 0) {
-    setFlows(flows);
-    console.log('✅ 系统已自动修复 ' + fixedCount + ' 条历史订单的实收流水。');
-    // 刷新统计页面（如果当前在统计页，立刻生效）
+  // 2. 极其精准地清理待办残留（必须同时满足三个条件才会删）
+  const newTodos = todos.filter(t => {
+    // 查找有没有跟这个待办对应的结单记录
+    const matchComplete = completed.find(c => c.todoId === t.id);
+    
+    // ★ 安全判定：只有结单记录里有明确的结单日期、且明确收到了钱，才认为是真结单
+    if (matchComplete && matchComplete.completedDate && Number(matchComplete.totalReceived) > 0) {
+      removedTodoCount++;
+      return false; // 从待办中移除
+    }
+    
+    // 如果找不到匹配的，或者只是个误入结单表的空壳，保留在待办里！
+    return true; 
+  });
+
+  if (fixedCount > 0 || removedTodoCount > 0) {
+    if (fixedCount > 0) setFlows(flows);
+    if (removedTodoCount > 0) setTodos(newTodos);
+
+    localStorage.setItem('listReceiptFlowFixVersion', 'v5');
+
+    // 静默同步云端
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      window.__hasUnsavedChanges = true;
+      if (typeof setPendingFlag === 'function') setPendingFlag(true);
+      if (typeof commitSyncNow === 'function') {
+        setTimeout(() => commitSyncNow(true), 1000);
+      }
+    }
+    
+    if (typeof renderTodoList === 'function') renderTodoList();
     if (typeof renderStatsPage === 'function') renderStatsPage();
+    
+    console.log(`✅ 修复完成：补全流水 ${fixedCount} 条，安全清理已结单残留待办 ${removedTodoCount} 条。`);
+  } else {
+    localStorage.setItem('listReceiptFlowFixVersion', 'v5');
   }
-  
-  // 标记已修复，以后不再重复执行
-  localStorage.setItem('listReceiptFlowFixVersion', 'v2');
 }
