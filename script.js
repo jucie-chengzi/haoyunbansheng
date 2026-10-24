@@ -25588,7 +25588,8 @@ async function handlePostLoginSync() {
 async function doAccountLogout() {
   if (!confirm('确定要退出登录吗？退出后数据仍会保留在本机。')) return;
   await supabaseClient.auth.signOut();
-  showToast('已退出登录', 3000);
+  // ★ 注意：这里故意不清除 receiptLastLoginUid，为了下次登录时检测是否换号
+  showToast('已退出登录，请放心，数据已保存在本机。', 4000);
   await checkUserSession();
 }
 
@@ -25672,27 +25673,62 @@ async function handleStartupSync(isNewOpen) {
   if (!session) return;
   currentUser = session.user;
 
-  // 有未上传数据
+  const currentUid = currentUser.id;
+  const lastUid = localStorage.getItem('receiptLastLoginUid');
+
+  // ★ 核心修复：多账号切换隔离（防止串号）
+  if (lastUid && lastUid !== currentUid) {
+    // 发现换号了！本地数据是上一个账号的残留
+    // 绝对不允许上传，必须提示清理
+    if (confirm("⚠️ 检测到您切换了账号！\n\n是否清空当前设备上另一个账号的旧数据，并从云端拉取当前账号的最新数据？\n\n（如果不清理，旧账号的订单会显示在新账号里，造成数据错乱）")) {
+      // 1. 清空本地残留的核心数据
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.indexOf('listReceipt') === 0) keysToRemove.push(k);
+      }
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      
+      // 2. 记录新账号 ID
+      localStorage.setItem('receiptLastLoginUid', currentUid);
+      
+      // 3. 从云端拉取新账号数据
+      if (typeof showToast === 'function') showToast('正在拉取新账号数据...', 3000);
+      await doCoverLocalInternal(true);
+      
+      // 4. 刷新页面，重新初始化所有 UI 组件
+      location.reload();
+      return;
+    } else {
+      alert("为了数据安全，已取消登录。请先手动清理本地数据，或退出登录。");
+      return;
+    }
+  }
+
+  // 记录本次登录的账号 ID
+  localStorage.setItem('receiptLastLoginUid', currentUid);
+
+  // === 下面是原有的正常同步逻辑 ===
   if (hasPendingFlag() || window.__hasUnsavedChanges) {
     window.__hasUnsavedChanges = true;
     setPendingFlag(true);
     if (isNewOpen) {
-      // 新打开 / 登录：弹窗询问用户
       showPendingUploadPrompt();
     } else {
-      // 刷新 / 切屏：静默重试上传
       await commitSyncNow(true);
     }
     return;
   }
 
-  // 新打开 + 无未上传 → 拉云端覆盖本地
   if (isNewOpen) {
     try {
       const { data } = await supabaseClient.from('user_data').select('id').eq('user_id', session.user.id).maybeSingle();
       if (data) {
         showToast('正在同步云端最新数据...', 2000);
         await doCoverLocalInternal(true);
+        setTimeout(() => {
+          if (typeof autoFixHistoricalFlows === 'function') autoFixHistoricalFlows();
+        }, 1000);
       } else {
         showToast('云端暂无备份数据。', 3000);
       }
@@ -25700,7 +25736,6 @@ async function handleStartupSync(isNewOpen) {
       console.warn('[启动同步] 拉云端失败', e);
     }
   }
-  // 刷新 / 切屏 + 无未上传 → 什么都不做
 }
 
 // 弹窗：询问用户“上次数据未上传，是否上传”
@@ -26002,84 +26037,80 @@ function showAlgorithmFormulaModal() {
   document.getElementById('modalRoot').innerHTML = html;
 }
 /* ═══════════════════════════════════════════════════════
-   [数据修复] 自动修复历史脏数据（精准安全版 v5）
+   [数据修复 v5] 彻底清理云端幽灵数据，并强制覆盖
    ═══════════════════════════════════════════════════════ */
 function autoFixHistoricalFlows() {
+  // 版本升级到 v5，强制所有用户重跑一次
   if (localStorage.getItem('listReceiptFlowFixVersion') === 'v5') return;
   
   const todos = getTodos();
   const completed = getCompleted();
+  const cancelled = getCancelled();
+  const discarded = getDiscarded();
   let flows = getFlows();
-  let fixedCount = 0;
-  let removedTodoCount = 0;
+  
+  let fixedTodos = 0;
+  let fixedFlows = 0;
 
-  // 1. 安全补全流水（只查漏补缺，不覆盖用户自己记的）
+  // 1. 收集结单/撤单/废稿的 ID
+  const settledIds = new Set();
+  completed.forEach(c => { if (c.todoId) settledIds.add(c.todoId); });
+  cancelled.forEach(c => { if (c.todoId) settledIds.add(c.todoId); });
+  discarded.forEach(c => { if (c.todoId) settledIds.add(c.todoId); });
+
+  // 2. 清理待办幽灵数据
+  const newTodos = todos.filter(t => {
+    if (settledIds.has(t.id)) {
+      fixedTodos++;
+      return false; 
+    }
+    return true;
+  });
+
+  // 3. 补全遗漏流水
   completed.forEach(c => {
     const totalReceived = Number(c.totalReceived) || 0;
     if (totalReceived <= 0) return;
-
-    const related = flows.filter(f => f.completedId === c.id);
-    const finalFlows = related.filter(f => f.type === 'final');
-
-    let needsFix = false;
-    if (finalFlows.length !== 1) {
-      needsFix = true;
-    } else if (Math.abs(Number(finalFlows[0].amount) - totalReceived) > 0.01) {
-      needsFix = true;
-    }
-
-    if (needsFix) {
-      flows = flows.filter(f => f.completedId !== c.id);
-      flows.push({
-        id: makeFlowId(),
-        type: 'final',
-        amount: totalReceived,
-        note: '实收（预付款+尾款） · ' + (c.clientName || '未命名') + ' [系统自动修复]',
-        date: c.completedDate || fmtDateStr(new Date()),
-        todoId: c.todoId || '',
-        completedId: c.id,
-        cancelledId: '',
-        discardedId: '',
-        createdAt: Date.now()
-      });
-      fixedCount++;
-    }
+    const finalFlows = flows.filter(f => f.completedId === c.id && f.type === 'final');
+    if (finalFlows.length === 1 && Math.abs(Number(finalFlows[0].amount) - totalReceived) <= 0.01) return;
+    
+    flows = flows.filter(f => !(f.completedId === c.id && f.type === 'final'));
+    flows.push({
+      id: makeFlowId(), type: 'final', amount: totalReceived,
+      note: '实收 · ' + (c.clientName || '未命名') + ' [修复]',
+      date: c.completedDate || fmtDateStr(new Date()),
+      todoId: c.todoId || '', completedId: c.id, cancelledId: '', discardedId: '', createdAt: Date.now()
+    });
+    fixedFlows++;
   });
 
-  // 2. 极其精准地清理待办残留（必须同时满足三个条件才会删）
-  const newTodos = todos.filter(t => {
-    // 查找有没有跟这个待办对应的结单记录
-    const matchComplete = completed.find(c => c.todoId === t.id);
+  // 4. 写入本地并强制上传云端
+  if (fixedTodos > 0 || fixedFlows > 0) {
+    if (fixedTodos > 0) setTodos(newTodos);
+    if (fixedFlows > 0) setFlows(flows);
     
-    // ★ 安全判定：只有结单记录里有明确的结单日期、且明确收到了钱，才认为是真结单
-    if (matchComplete && matchComplete.completedDate && Number(matchComplete.totalReceived) > 0) {
-      removedTodoCount++;
-      return false; // 从待办中移除
-    }
-    
-    // 如果找不到匹配的，或者只是个误入结单表的空壳，保留在待办里！
-    return true; 
-  });
-
-  if (fixedCount > 0 || removedTodoCount > 0) {
-    if (fixedCount > 0) setFlows(flows);
-    if (removedTodoCount > 0) setTodos(newTodos);
-
     localStorage.setItem('listReceiptFlowFixVersion', 'v5');
-
-    // 静默同步云端
+    
+    // 强制触发云端同步
     if (typeof currentUser !== 'undefined' && currentUser) {
       window.__hasUnsavedChanges = true;
       if (typeof setPendingFlag === 'function') setPendingFlag(true);
-      if (typeof commitSyncNow === 'function') {
-        setTimeout(() => commitSyncNow(true), 1000);
-      }
+      
+      // 延迟 3 秒执行，等页面加载稳定
+      setTimeout(() => {
+        if (typeof doCoverCloudInternal === 'function') {
+          doCoverCloudInternal(true).then(() => {
+            console.log('✅ 幽灵数据已清理，并成功覆盖云端！');
+            if (typeof showToast === 'function') showToast('✅ 历史脏数据已清理并同步云端', 3000);
+          });
+        }
+      }, 3000);
     }
     
     if (typeof renderTodoList === 'function') renderTodoList();
     if (typeof renderStatsPage === 'function') renderStatsPage();
-    
-    console.log(`✅ 修复完成：补全流水 ${fixedCount} 条，安全清理已结单残留待办 ${removedTodoCount} 条。`);
+    if (typeof renderCompletedList === 'function') renderCompletedList();
+    console.log(`✅ 修复脚本 v5：清理待办 ${fixedTodos} 条，补全流水 ${fixedFlows} 条。`);
   } else {
     localStorage.setItem('listReceiptFlowFixVersion', 'v5');
   }
