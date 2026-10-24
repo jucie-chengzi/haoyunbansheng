@@ -1233,7 +1233,8 @@ window.addEventListener('beforeunload', releaseAllObjectURLs);
 async function saveImageBlob(blob, name) {
   if (!blob) return '';
 
-  // 1. 先保存在本地 IndexedDB
+  // ★ 核心优化：这里只做本地保存，不再在主线程里等云端上传！
+  // 云端上传交给同步模块的补传机制去后台静默处理，彻底解决导入订单卡顿！
   let localRef = '';
   if (!__idbAvailable) {
     localRef = await blobToDataURL(blob);
@@ -1253,30 +1254,6 @@ async function saveImageBlob(blob, name) {
     } catch (e) {
       console.warn('[IDB] 写入失败，降级 base64', e);
       localRef = await blobToDataURL(blob);
-    }
-  }
-
-  // 2. 如果已登录，同时把图片上传到云端 Supabase Storage
-  if (currentUser && supabaseClient) {
-    try {
-      // 生成一个独一无二的云路径，带上用户ID，保证隔离安全
-      const fileExt = blob.type === 'image/webp' ? 'webp' : 'png';
-      const cloudPath = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
-
-      const { error } = await supabaseClient.storage
-        .from('images')
-        .upload(cloudPath, blob, { contentType: blob.type, upsert: true });
-
-      if (!error) {
-        // 上传成功，把云路径记在本地 IDB 里，方便以后去云上找
-        // 我们直接把云路径拼接到本地引用上，用双下划线隔开，方便解析
-        localRef = localRef + '__cloud__' + cloudPath;
-        console.log('图片成功上传到云端:', cloudPath);
-      } else {
-        console.warn('图片上传云端失败:', error.message);
-      }
-    } catch (err) {
-      console.warn('图片上传云端异常:', err);
     }
   }
 
@@ -7742,10 +7719,12 @@ async function importToTodo() {
   if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
   
-  // ★ 导入订单成功后，强制同步一次云端
-  if (typeof currentUser !== 'undefined' && currentUser && typeof doCoverCloudInternal === 'function') {
-    doCoverCloudInternal().catch(e => console.warn(e));
-  }
+  // ★ 优化：改为延迟 500ms 同步，避免与截图和 DOM 渲染抢夺主线程，解决卡顿
+  setTimeout(() => {
+    window.__hasUnsavedChanges = true;
+    setPendingFlag(true);
+    commitSyncNow();
+  }, 500);
   
   showPage('pageTodo');
 }
@@ -8687,7 +8666,9 @@ async function confirmFinalSettle() {
   cleanupOrderImages(t).catch(e => console.warn(e));
 
   /* 从待办移除 */
-  setTodos(todos.filter(x => x.id !== s.todoId));
+  // ★ 核心修复：重新获取最新的待办，防止在生成小票的几秒钟内产生的新订单被覆盖
+  const currentTodos = getTodos();
+  setTodos(currentTodos.filter(x => x.id !== s.todoId));
 
   window.__settleState = null;
   window.__settleFinalState = null;
@@ -14330,7 +14311,12 @@ function confirmResetAllData() {
   } catch (e) {}
 
   /* 清空 IDB 图片 */
-  idbClearFiles().catch(() => {}).finally(() => {
+  idbClearFiles().catch(() => {}).finally(async () => {
+    if (typeof currentUser !== 'undefined' && currentUser) {
+      window.__hasUnsavedChanges = true;
+      setPendingFlag(true);
+      await commitSyncNow();
+    }
     alert('已恢复初始状态，页面将刷新。');
     location.reload();
   });
@@ -24872,36 +24858,137 @@ function onAutoSyncToggle() {
   }
 }
 
+// ============================================================
+// [同步核心 v3] 本地优先 + 完整操作立即上传 + 失败真重试 + 未上传标记持久化
+// ============================================================
+
+// 未上传标记（持久化到 localStorage，跨刷新/跨关闭浏览器都有效）
+const PENDING_FLAG_KEY = 'receiptPendingUploadFlag';
+
+// 是否有"完整操作产生、但还没上传成功"的本地数据
+window.__hasUnsavedChanges = false;
+// 打字中标记（input 打字时为 true，click 时清空）
+window.__isTyping = false;
+// 打字停止计时器
+let __typingTimer = null;
+// 合并窗口（把同一次操作里的多次写入合并为一次上传）
+let __commitTimer = null;
+// 批量写入模式（数据修复时用，期间不触发上传）
+window.__batchWriteMode = false;
+
+// 这些页面上的写入不上传（编辑中）
+const SYNC_SKIP_PAGES = ['pageReceipt', 'pageBasicSetting', 'pagePriceListSettings'];
+
+// 读写未上传标记
+function setPendingFlag(on) {
+  try {
+    if (on) {
+      originalSetItem.call(localStorage, PENDING_FLAG_KEY, '1');
+    } else {
+      localStorage.removeItem(PENDING_FLAG_KEY);
+    }
+  } catch (e) {}
+}
+function hasPendingFlag() {
+  try { return localStorage.getItem(PENDING_FLAG_KEY) === '1'; }
+  catch (e) { return false; }
+}
+
+// 启动时从 flag 恢复 __hasUnsavedChanges（跨刷新的兜底）
+(function restorePendingFlagOnLoad() {
+  try {
+    if (localStorage.getItem(PENDING_FLAG_KEY) === '1') {
+      window.__hasUnsavedChanges = true;
+    }
+  } catch (e) {}
+})();
+
+function isSyncSkippedPage() {
+  const cur = document.querySelector('.page.active');
+  if (!cur) return false;
+  return SYNC_SKIP_PAGES.indexOf(cur.id) > -1;
+}
+
+function canSyncNow() {
+  return !!(currentUser && isAutoSyncEnabled() && !window.__batchWriteMode && !isSyncSkippedPage());
+}
+
+// 所有"数据发生变化"的入口
 function triggerAutoSync() {
   if (!currentUser || !isAutoSyncEnabled()) return;
-  
-  // ★ 核心策略：在“基础信息页”和“小票填写页”时，禁止触发自动同步。
-  // 这些页面只有用户点击“保存”或“导入订单”时，才会手动调用 doCoverCloudInternal() 同步。
-  const currentActivePage = document.querySelector('.page.active');
-  if (currentActivePage) {
-    const pageId = currentActivePage.id;
-    if (pageId === 'pageBasicSetting' || pageId === 'pageReceipt') {
-      // 记入待同步状态，不触发网络请求
-      window.__syncPending = true;
-      return; 
-    }
-  }
+  if (window.__batchWriteMode) return;
+  if (window.__isTyping) return;
+  if (isSyncSkippedPage()) return;
+
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
 
   const statusEl = document.getElementById('syncStatusText');
   if (statusEl) statusEl.innerText = '有更新，待上传...';
 
-  if (autoSyncTimer) clearTimeout(autoSyncTimer);
-  autoSyncTimer = setTimeout(async () => {
-    if (statusEl) statusEl.innerText = '正在自动上传...';
-    await doCoverCloudInternal();
-  }, 5000);
+  if (__commitTimer) clearTimeout(__commitTimer);
+  __commitTimer = setTimeout(() => {
+    __commitTimer = null;
+    commitSyncNow();
+  }, 300);
 }
 
-// ★ 劫持本地存储，任何修改都会触发自动同步
+// 立即上传（无延迟，等云端真写完才算成功）
+async function commitSyncNow(silent) {
+  if (!canSyncNow()) return false;
+  return await doCoverCloudInternal(silent);
+}
+
+// 全局监听：输入 → 进入"打字中"
+document.addEventListener('input', function (e) {
+  const t = e.target;
+  if (!t) return;
+  const tag = t.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+    if (t.type === 'file') return;
+    window.__isTyping = true;
+    if (__typingTimer) clearTimeout(__typingTimer);
+    __typingTimer = setTimeout(() => {
+      window.__isTyping = false;
+      __typingTimer = null;
+    }, 8000);
+  }
+}, true);
+
+// 全局监听：点击按钮 → 退出"打字中"
+document.addEventListener('click', function (e) {
+  const t = e.target;
+  if (!t || !t.closest) return;
+  const btn = t.closest('button, a, [role="button"], .upload-btn, .pick-btn, .td-mini-btn');
+  if (!btn) return;
+  if (__typingTimer) { clearTimeout(__typingTimer); __typingTimer = null; }
+  window.__isTyping = false;
+}, true);
+
+// 全局监听：指针抬起（拖拽排序结束）→ 退出"打字中"
+document.addEventListener('pointerup', function () {
+  if (window.__isTyping) {
+    window.__isTyping = false;
+    if (__typingTimer) { clearTimeout(__typingTimer); __typingTimer = null; }
+  }
+}, true);
+
+// 网络恢复：真的重试上传
+window.addEventListener('online', function () {
+  if (window.__hasUnsavedChanges && currentUser) {
+    showToast('网络已恢复，正在自动上传...', 3000);
+    commitSyncNow();
+  }
+});
+
+// 劫持 localStorage.setItem：所有写入都经过 triggerAutoSync
 const originalSetItem = localStorage.setItem;
 localStorage.setItem = function(key, value) {
   originalSetItem.apply(this, [key, value]);
-  if (key && key.indexOf('listReceipt') === 0 && key !== 'listReceiptAutoSync' && key !== 'listReceiptLastSyncTime') {
+  if (key && key.indexOf('listReceipt') === 0
+      && key !== 'listReceiptAutoSync'
+      && key !== 'listReceiptLastSyncTime'
+      && key !== 'lastLocalModifyTime') {
     triggerAutoSync();
   }
 };
@@ -24915,79 +25002,168 @@ function updateSyncStatusUI() {
   }
 }
 
-/* ══════════ 核心同步逻辑（内部静默版） ══════════ */
-let isUploading = false; // ★ 增加并发锁
+/* ______________ 核心同步逻辑（v4 · 修复并发丢数据） ______________ */
+let __isUploading = false;    // 上传中锁
+let __uploadQueued = false;   // ★ 新增：排队标记，防止并发覆盖丢数据
+let __uploadRetryCount = 0;   // 失败重试次数
+let __uploadRetryTimer = null;
+// 递归扫描对象，把本地没传的图片补传云端，并替换成带云路径的引用
+async function replaceLocalImageRefs(obj) {
+  if (!currentUser || !supabaseClient) return false;
+  let changed = false;
+  
+  async function traverse(o) {
+    if (typeof o === 'string') {
+      if (o.indexOf('file_') === 0 && o.indexOf('__cloud__') === -1) {
+        try {
+          const rec = await idbGetFile(o);
+          if (rec && rec.blob) {
+            const fileExt = rec.blob.type === 'image/webp' ? 'webp' : 'png';
+            const cloudPath = `${currentUser.id}/${Date.now()}_${Math.random().toString(36).substring(2, 8)}.${fileExt}`;
+            const { error } = await supabaseClient.storage.from('images').upload(cloudPath, rec.blob, { contentType: rec.blob.type, upsert: true });
+            if (!error) {
+              changed = true;
+              return o + '__cloud__' + cloudPath;
+            }
+          }
+        } catch(e) {}
+      }
+      return o;
+    }
+    if (Array.isArray(o)) {
+      for (let i = 0; i < o.length; i++) {
+        const res = await traverse(o[i]);
+        if (res !== o[i]) { o[i] = res; changed = true; }
+      }
+    } else if (o && typeof o === 'object') {
+      for (const k in o) {
+        const res = await traverse(o[k]);
+        if (res !== o[k]) { o[k] = res; changed = true; }
+      }
+    }
+    return o;
+  }
+  await traverse(obj);
+  return changed;
+}
 
-async function doCoverCloudInternal() {
-  if (!currentUser) return;
-  if (isUploading) return; // 并发锁
-  isUploading = true;
+// 上传：等云端真写完，才清除 __hasUnsavedChanges 并提示成功
+async function doCoverCloudInternal(silent) {
+  if (!currentUser) return false;
+  if (!supabaseClient) return false;
+  
+  // ★ 核心修复：如果正在上传，标记为排队，不要直接丢弃！
+  if (__isUploading) {
+    __uploadQueued = true;
+    return false;
+  }
 
+  __isUploading = true;
+  __uploadQueued = false; // 清空排队标记
+  const statusEl = document.getElementById('syncStatusText');
+  if (statusEl && !silent) statusEl.innerText = '正在上传...';
+
+  let uploadError = null;
   try {
-    // 记录本地操作时间，防止同步时被云端覆盖
     originalSetItem.call(localStorage, 'lastLocalModifyTime', Date.now().toString());
 
     const { data: { session } } = await supabaseClient.auth.getSession();
-    if (!session) { isUploading = false; return; }
+    if (!session) { __isUploading = false; return false; }
     currentUser = session.user;
 
     const lsData = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.indexOf('listReceipt') === 0 && key !== 'listReceiptAutoSync' && key !== 'listReceiptLastSyncTime' && key !== 'lastLocalModifyTime') {
+      if (key && key.indexOf('listReceipt') === 0
+          && key !== 'listReceiptAutoSync'
+          && key !== 'listReceiptLastSyncTime'
+          && key !== 'lastLocalModifyTime') {
         const raw = localStorage.getItem(key);
         if (raw) {
-          try { 
+          try {
             let parsed = JSON.parse(raw);
             if (typeof parsed === 'string') parsed = parsed.replace(/^"|"$/g, '');
-            lsData[key] = parsed; 
+            lsData[key] = parsed;
           } catch (e) { lsData[key] = raw; }
         }
       }
     }
 
-        const payload = { data: lsData, updatedAt: Date.now() };
-    
-    // ★ 终极完美修复：使用 upsert（有则更新，无则插入）。
-    // 这样不仅云端永远只有 1 行数据，而且不会出现“删除后插入失败导致数据丢失”的风险，绝对安全。
+    // ★ 核心修复：上传前扫描并补传本地未同步的图片
+    if (statusEl && !silent) statusEl.innerText = '正在同步图片...';
+    for (const key in lsData) {
+      if (lsData[key] && typeof lsData[key] === 'object') {
+        const changed = await replaceLocalImageRefs(lsData[key]);
+        if (changed) {
+          // 替换成功后，把新的带云路径的引用更新回本地，避免以后重复传
+          originalSetItem.call(localStorage, key, JSON.stringify(lsData[key]));
+        }
+      }
+    }
+    if (statusEl && !silent) statusEl.innerText = '正在上传数据...';
+
+    const payload = { data: lsData, updatedAt: Date.now() };
     const { error } = await supabaseClient
       .from('user_data')
       .upsert(
-        { user_id: session.user.id, data: payload, updated_at: new Date().toISOString() }, 
+        { user_id: session.user.id, data: payload, updated_at: new Date().toISOString() },
         { onConflict: 'user_id' }
       );
 
-    if (error) {
-      console.warn('自动同步被暂时拒绝 (RLS)，5秒后自动重试...', error.message);
-      const statusEl = document.getElementById('syncStatusText');
-      if (statusEl) statusEl.innerText = '同步重试中...';
-      
-      isUploading = false;
-      setTimeout(() => { doCoverCloudInternal(); }, 5000);
-      return;
+    if (error) { uploadError = error; console.warn('[同步] 上传失败：', error.message); }
+  } catch (e) {
+    uploadError = e;
+    console.warn('[同步] 上传异常：', e);
+  } finally {
+    __isUploading = false;
+    
+    // ★ 核心修复：上传完成后，如果发现有排队的任务，立刻再执行一次！
+    if (__uploadQueued && !uploadError) {
+      __uploadQueued = false;
+      setTimeout(() => doCoverCloudInternal(true), 100);
     }
+  }
 
+  // 云端真的写成功 → 清标记、清 pending flag、提示成功
+  if (!uploadError) {
+    window.__hasUnsavedChanges = false;
+    setPendingFlag(false);
+    __uploadRetryCount = 0;
+    if (__uploadRetryTimer) { clearTimeout(__uploadRetryTimer); __uploadRetryTimer = null; }
     originalSetItem.call(localStorage, 'listReceiptLastSyncTime', Date.now().toString());
     updateSyncStatusUI();
-    showToast('✅ 自动同步成功！', 3000);
-    const statusEl = document.getElementById('syncStatusText');
     if (statusEl) statusEl.innerText = '已同步';
-
-  } catch (e) {
-    console.error('自动同步异常', e);
-  } finally {
-    isUploading = false;
+    if (!silent) showToast('✅ 云端同步成功！', 3000);
+    return true;
   }
+
+  // 失败：保留未上传标记 + pending flag，退避重试（5s / 10s / 20s / 40s / 60s）
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  if (statusEl) statusEl.innerText = '同步失败，待重试...';
+  if (!silent) showToast('⚠️ 已保存到本地，云端暂未同步。网络恢复后会自动上传。', 5000);
+
+  const delayList = [5000, 10000, 20000, 40000, 60000];
+  const delay = delayList[Math.min(__uploadRetryCount, delayList.length - 1)];
+  __uploadRetryCount++;
+  if (__uploadRetryTimer) clearTimeout(__uploadRetryTimer);
+  __uploadRetryTimer = setTimeout(() => {
+    __uploadRetryTimer = null;
+    if (window.__hasUnsavedChanges && currentUser) {
+      doCoverCloudInternal(true);
+    }
+  }, delay);
+  return false;
 }
 
-// ★ 核心修复：不仅拉取数据，还要强制刷新所有界面元素（不再需要 F5）
-async function doCoverLocalInternal() {
-    // ★ 防回滚护栏：如果本地 15 秒内有过修改，说明用户正在操作，拒绝从云端覆盖本地的拉取！
-  const lastMod = localStorage.getItem('lastLocalModifyTime');
-  if (lastMod && Date.now() - Number(lastMod) < 15000) {
-    console.warn('本地有新鲜操作，已跳过此次云端覆盖');
+// 拉取云端 → 覆盖本地。默认情况下，本地有未上传数据时直接跳过。
+// forceOverwrite = true 时强制覆盖（用户主动点“覆盖本机” / 新打开 / 登录 / 导入 JSON 后）。
+async function doCoverLocalInternal(forceOverwrite) {
+  if (!forceOverwrite && window.__hasUnsavedChanges) {
+    console.warn('[同步] 本地有未上传数据，已跳过云端覆盖');
     return;
   }
+
   let session = null;
   let retries = 0;
   while (!session && retries < 5) {
@@ -25000,14 +25176,12 @@ async function doCoverLocalInternal() {
     await new Promise(r => setTimeout(r, 300));
     retries++;
   }
-  
   if (!session) { showToast('登录状态未完全就绪，请稍后再试'); return; }
 
   const { data, error } = await supabaseClient
     .from('user_data')
     .select('data')
-    .order('id', { ascending: false })
-    .limit(1)
+    .eq('user_id', session.user.id)
     .maybeSingle();
 
   if (error) { showToast('❌ 读取云端失败：' + error.message); return; }
@@ -25029,10 +25203,14 @@ async function doCoverLocalInternal() {
     }
   }
 
+  // 覆盖成功后：本地 = 云端，不再有未上传
+  window.__hasUnsavedChanges = false;
+  setPendingFlag(false);
+  __uploadRetryCount = 0;
+  if (__uploadRetryTimer) { clearTimeout(__uploadRetryTimer); __uploadRetryTimer = null; }
+
   requestAnimationFrame(() => {
     showToast('✅ 数据同步成功！正在刷新页面内容...', 3000);
-    
-    // 刷新主模块
     if (typeof renderTodoList === 'function') renderTodoList();
     if (typeof renderMasterList === 'function') renderMasterList();
     if (typeof renderSchedule === 'function') renderSchedule();
@@ -25041,10 +25219,8 @@ async function doCoverLocalInternal() {
     if (typeof renderCancelledList === 'function') renderCancelledList();
     if (typeof renderDiscardedList === 'function') renderDiscardedList();
 
-    // ★ 核心修复：补上漏掉的「身份预设列表」刷新！让它瞬间变成最新值，无需刷新页面！
     if (typeof renderIdentityList === 'function') renderIdentityList();
 
-    // 强制重绘身份下拉框和ID输入框
     const newIdentity = localStorage.getItem('listReceiptDefaultIdentity') || '画师';
     const newArtistName = localStorage.getItem('listReceiptArtistName') || '';
     const identities = getIdentities();
@@ -25054,23 +25230,20 @@ async function doCoverLocalInternal() {
       identitySel.innerHTML = identities.map(n => `<option value="${escapeAttr(n)}">${escapeHtml(n)}</option>`).join('');
       identitySel.value = newIdentity;
     }
-    
     const setNameInput = document.getElementById('setName');
     if (setNameInput) setNameInput.value = newArtistName;
 
-    // 刷新小票页的画师美工
     if (typeof renderArtistIdentitySelect === 'function') renderArtistIdentitySelect();
     const artistIdentitySel = document.getElementById('artistIdentity');
     if (artistIdentitySel) artistIdentitySel.value = newIdentity;
     const artistIdInput = document.getElementById('artistId');
     if (artistIdInput) artistIdInput.value = newArtistName;
 
-    // 刷新权限、平台、定金预设
     if (typeof renderPermissionList === 'function') renderPermissionList();
     if (typeof syncPermissionsToMain === 'function') syncPermissionsToMain();
     if (typeof renderSetPlatformSelect === 'function') renderSetPlatformSelect();
     if (typeof syncPlatformsToMain === 'function') syncPlatformsToMain();
-    
+
     if (typeof getDepositPreset === 'function') {
       const dp = getDepositPreset();
       if (document.getElementById('setDepositMode')) document.getElementById('setDepositMode').value = dp.mode;
@@ -25081,21 +25254,22 @@ async function doCoverLocalInternal() {
       if (typeof updateDepositUnit === 'function') updateDepositUnit();
     }
 
-    // 刷新小票外观与价目表
     if (typeof applyReceiptSettings === 'function') applyReceiptSettings();
     if (typeof renderPriceListSettingsForm === 'function') renderPriceListSettingsForm();
     if (typeof renderPriceListPreview === 'function') renderPriceListPreview();
 
-    if (document.getElementById('pageAccount').classList.contains('active')) {
+    if (document.getElementById('pageAccount') && document.getElementById('pageAccount').classList.contains('active')) {
       checkUserSession();
     }
   });
 }
 
-/* ══════════ 对外按钮（带确认框的手动同步） ══════════ */
+/* ══════════ 对外按钮（手动同步） ══════════ */
 async function doCoverCloud() {
   if (!currentUser) return alert('请先登录！');
   if (!confirm('⚠️ 警告：这会把本机的所有数据（订单、单主、设置）覆盖云端。\n\n确定继续吗？')) return;
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
   await doCoverCloudInternal();
   showPage('pageAccount');
 }
@@ -25103,7 +25277,7 @@ async function doCoverCloud() {
 async function doCoverLocal() {
   if (!currentUser) return alert('请先登录！');
   if (!confirm('⚠️ 警告：这会把云端的数据拉到本机，并且覆盖本机所有当前数据。\n\n确定继续吗？')) return;
-  await doCoverLocalInternal();
+  await doCoverLocalInternal(true);
   showPage('pageAccount');
 }
 
@@ -25111,7 +25285,7 @@ async function doDataMerge(silent) {
   if (!currentUser) return alert('请先登录！');
   if (!silent && !confirm('⚠️ 数据合并会把云端和本机数据按时间戳合并，可能出现少量冲突。\n\n确定继续吗？')) return;
   if (!silent) showToast('数据合并功能将在后续版本升级。当前操作将执行“从云端拉取最新数据”。', 4000);
-  await doCoverLocalInternal();
+  await doCoverLocalInternal(true);
 }
 
 /* ══════════ 弹窗、登录、注册、退出相关 ══════════ */
@@ -25128,7 +25302,112 @@ function showToast(msg, duration = 5000) {
   if (toast.timeout) clearTimeout(toast.timeout);
   toast.timeout = setTimeout(() => { toast.style.opacity = '0'; }, duration);
 }
+/* ══════════ 一键诊断无法登录原因 ══════════ */
+function showAuthDiagnoseModal() {
+  const emailVal = document.getElementById('authEmail') ? document.getElementById('authEmail').value.trim() : '';
+  const pwdVal = document.getElementById('authPassword') ? document.getElementById('authPassword').value.trim() : '';
 
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" style="max-width: 440px;" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>网络与账号诊断</h3>
+          <button class="icon-btn" onclick="closeModal();openAuthModal('login')">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="font-size: 12.5px; color: var(--ink-soft); line-height: 1.6; margin-bottom: 16px;">
+            如果你确定没输错密码但一直无法登录，请点击下方按钮。系统会模拟一次注册/登录来排查真实原因。
+          </p>
+          <label>邮箱</label>
+          <input type="email" id="diagEmail" value="${escapeHtml(emailVal)}" placeholder="填写你正在用的邮箱" />
+          <label>密码</label>
+          <input type="password" id="diagPassword" value="${escapeHtml(pwdVal)}" placeholder="填写你正在用的密码" />
+          
+          <div id="diagResultBox" style="display:none; margin-top: 16px; padding: 12px; background: #f7f8fa; border: 1px solid var(--line); font-family: monospace; font-size: 12px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto;"></div>
+
+          <div class="actions" style="justify-content:flex-end; margin-top: 18px;">
+            <button class="action-btn ghost" onclick="closeModal();openAuthModal('login')">返回登录</button>
+            <button class="action-btn" id="diagBtn" onclick="startAuthDiagnose()">开始检测</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+async function startAuthDiagnose() {
+  const email = document.getElementById('diagEmail').value.trim();
+  const password = document.getElementById('diagPassword').value.trim();
+  const btn = document.getElementById('diagBtn');
+  const resBox = document.getElementById('diagResultBox');
+
+  if (!email || !password) { alert('请先填写邮箱和密码'); return; }
+
+  btn.disabled = true;
+  btn.innerText = '检测中...';
+  resBox.style.display = 'block';
+  resBox.innerHTML = '正在连接服务器进行诊断...\n';
+
+  let report = `【账号诊断报告】\n时间：${new Date().toLocaleString()}\n`;
+  report += `账号：${email}\n`;
+  report += `密码长度：${password.length}位\n`;
+  report += `------------------------\n`;
+
+  try {
+    // 1. 查格式
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw new Error('邮箱格式错误，缺少 @ 或域名（如 .com）。请仔细检查！');
+    }
+
+    // 2. 尝试登录
+    const { error: signInError } = await supabaseClient.auth.signInWithPassword({ email, password });
+    
+    if (!signInError) {
+      report += `✅ 检测结果：登录成功！\n`;
+      report += `你的账号密码完全正确。请返回主页刷新查看。`;
+      resBox.innerText = report;
+      return;
+    }
+
+    report += `尝试登录失败：${signInError.message}\n`;
+
+    if (signInError.message.indexOf('Invalid login credentials') > -1) {
+      // 3. 究竟是密码错，还是没注册？我们尝试去注册他
+      report += `正在检测该邮箱是否已注册...\n`;
+      const { data: signUpData, error: signUpError } = await supabaseClient.auth.signUp({ email, password });
+      
+      if (signUpError) {
+        if (signUpError.message.indexOf('User already registered') > -1) {
+          report += `❌ 检测结果：该账号已存在，但你输入的密码错误！\n`;
+          report += `👉 解决办法：请点击【找回密码】重置密码，或者检查键盘大小写、前后是否多打了空格。`;
+        } else {
+          report += `❌ 注册测试异常：${signUpError.message}\n`;
+        }
+      } else if (signUpData && signUpData.user && signUpData.user.identities && signUpData.user.identities.length === 0) {
+        // 如果注册返回的 identities 是空数组，说明邮箱已存在
+        report += `❌ 检测结果：该账号已存在，但密码错误！\n`;
+        report += `👉 解决办法：请点击【找回密码】重置密码。`;
+      } else {
+        // 如果直接注册成功了，说明根本没注册过
+        report += `❌ 检测结果：该邮箱【从未注册过】！\n`;
+        report += `👉 解决办法：系统已顺手帮你注册，请直接返回登录即可。`;
+      }
+    } else {
+      report += `❌ 检测结果：遇到其他错误。\n`;
+      report += `错误代码：${signInError.status} \n`;
+    }
+  } catch (err) {
+    if (err.message.indexOf('Failed to fetch') > -1) {
+      report += `❌ 检测结果：网络请求失败！\n👉 请检查你的网络连接，或关闭 VPN、广告拦截插件。`;
+    } else {
+      report += `❌ 检测结果：${err.message}`;
+    }
+  } finally {
+    resBox.innerText = report + `\n\n=================\n👉 请将上方文字截图发给开发者 👈`;
+    btn.disabled = false;
+    btn.innerText = '重新检测';
+  }
+}
 function openAuthModal(mode) {
   window.__authMode = mode;
   const modalHTML = `
@@ -25143,12 +25422,23 @@ function openAuthModal(mode) {
           <label>邮箱</label>
           <input type="email" id="authEmail" placeholder="填写邮箱" />
           <label>密码（至少6位）</label>
-          <input type="password" id="authPassword" placeholder="填写密码" />
+          <div class="password-input-wrap">
+            <input type="password" id="authPassword" placeholder="填写密码" />
+            <button type="button" class="password-eye-btn" onclick="togglePasswordVisibility('authPassword', this)" title="显示/隐藏密码">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
           <div class="actions" style="justify-content:center; margin-top:24px;">
             <button class="action-btn" style="width:100%;" id="authSubmitBtn" onclick="submitAuthForm()">${mode === 'login' ? '登 录' : '注 册'}</button>
           </div>
-          <div style="display:flex; justify-content:space-between; margin-top:20px; font-size:12.5px; color:var(--ink-soft);">
-            <span id="authForgotBtn" style="cursor:pointer; text-decoration:underline; ${mode === 'register' ? 'display:none;' : ''}" onclick="showForgotPasswordModal()">找回密码</span>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; font-size:12.5px; color:var(--ink-soft);">
+            <div style="display:flex; gap:12px;">
+              <span id="authForgotBtn" style="cursor:pointer; text-decoration:underline; ${mode === 'register' ? 'display:none;' : ''}" onclick="showForgotPasswordModal()">找回密码</span>
+              <span style="cursor:pointer; text-decoration:underline; color:var(--red);" onclick="showAuthDiagnoseModal()">无法登录？点此检测</span>
+            </div>
             <span id="authSwitchBtn" style="cursor:pointer; text-decoration:underline;" onclick="switchAuthMode()">
               ${mode === 'login' ? '没有账号？去注册' : '已有账号？去登录'}
             </span>
@@ -25161,7 +25451,36 @@ function openAuthModal(mode) {
   setTimeout(() => { document.getElementById('authEmail').focus(); }, 100);
 }
 
+// ★ 新增：切换密码可见状态（确保小眼睛生效）
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+  
+  if (isPassword) {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+  } else {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  }
+}
+
 function closeAuthModal() { document.getElementById('modalRoot').innerHTML = ''; }
+
+// ★ 新增：切换密码可见状态
+function togglePasswordVisibility(inputId, btn) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+  
+  // 切换图标（闭眼/睁眼）
+  if (isPassword) {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+  } else {
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+  }
+}
 
 function switchAuthMode() {
   if (window.__authMode === 'login') openAuthModal('register');
@@ -25170,17 +25489,35 @@ function switchAuthMode() {
 
 function showAuthError(msg) { document.getElementById('authModalError').innerText = msg; }
 
-/* ══════════ 核心验证与提交逻辑 ══════════ */
+/* ══════════ 核心验证与提交逻辑（极致防呆） ══════════ */
 async function submitAuthForm() {
   if (!initCloud()) return;
+  
   const email = document.getElementById('authEmail').value.trim();
-  const password = document.getElementById('authPassword').value;
+  const password = document.getElementById('authPassword').value.trim();
 
-  // 1. 明确的输入拦截提示，不让用户以为是网络问题
-  if (!email) { showAuthError('请填写邮箱！'); return; }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showAuthError('邮箱格式不正确！'); return; }
+  // 1. 基础校验
+  if (!email) { showAuthError('请输入邮箱！'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { 
+    showAuthError('邮箱格式错误，请输入正确的邮箱地址'); return; 
+  }
   if (!password) { showAuthError('请填写密码！'); return; }
   if (password.length < 6) { showAuthError('密码不能少于 6 位！'); return; }
+
+  // 2. 常见邮箱后缀手误拦截（防呆，防止因少打一个字母变成别的国家域名）
+  const emailLower = email.toLowerCase();
+  const typoMap = {
+    '@qq.co': '@qq.com', '@qq.c': '@qq.com', '@qq.om': '@qq.com', '@qq.con': '@qq.com',
+    '@163.co': '@163.com', '@163.c': '@163.com', '@163.om': '@163.com',
+    '@gmail.co': '@gmail.com', '@gmail.c': '@gmail.com',
+    '@126.co': '@126.com', '@126.c': '@126.com'
+  };
+  for (const typo in typoMap) {
+    if (emailLower.endsWith(typo)) {
+      showAuthError(`❌ 邮箱后缀错误！您是不是想输入：${typoMap[typo]} ？请修改后再试。`);
+      return;
+    }
+  }
 
   const mode = window.__authMode;
   const btn = document.getElementById('authSubmitBtn');
@@ -25191,29 +25528,42 @@ async function submitAuthForm() {
   try {
     if (mode === 'login') {
       // ============ 登录逻辑 ============
+      // ★ 绝对安全：只调用 signInWithPassword，失败就报错，绝不偷偷注册！
       const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      
       if (error) {
-        if (error.message.indexOf('Invalid login credentials') > -1) showAuthError('该账号未注册或密码错误，请先注册！');
-        else showAuthError('登录失败：' + error.message);
+        if (error.message.indexOf('Invalid login credentials') > -1) {
+          // Supabase 出于安全考虑，不会告诉你到底是账号错还是密码错，统一报这个
+          showAuthError('❌ 账号或密码错误！请检查大小写、多余空格，或点击下方【找回密码】。');
+        } else if (error.message.indexOf('Email not confirmed') > -1) {
+          showAuthError('该账号未验证邮箱，请去邮箱点击验证链接。');
+        } else {
+          showAuthError('登录失败：' + error.message);
+        }
       } else {
+        // 登录成功
         closeAuthModal(); showToast('登录成功！');
         await checkUserSession();
         await handlePostLoginSync();
       }
     } else {
       // ============ 注册逻辑 ============
+      // 只有用户明确点击了“注册”按钮（mode === 'register'），才会执行这里的代码
       const { data, error } = await supabaseClient.auth.signUp({ email, password });
       
       if (error) {
-        if (error.message.indexOf('User already registered') > -1) showAuthError('该账号已注册，请直接登录！');
-        else showAuthError('注册失败：' + error.message);
+        if (error.message.indexOf('User already registered') > -1) {
+          showAuthError('❌ 该账号已注册，请直接去登录！');
+        } else {
+          showAuthError('注册失败：' + error.message);
+        }
       } else {
         if (data.session) {
           closeAuthModal(); showToast('注册成功！已自动登录。');
           await checkUserSession();
           await handlePostLoginSync();
         } else if (data.user && data.user.identities && data.user.identities.length === 0) {
-          showAuthError('该邮箱已经注册过了，请直接登录或找回密码！');
+          showAuthError('❌ 该邮箱已经注册过了，请直接去登录！');
         } else {
           closeAuthModal();
           alert('注册成功！请使用该邮箱和密码登录。');
@@ -25222,44 +25572,17 @@ async function submitAuthForm() {
       }
     }
   } catch (err) {
-    showAuthError('网络请求失败，请检查网络！'); console.error('注册/登录异常：', err);
+    showAuthError('网络请求失败，请检查网络！'); 
+    console.error('注册/登录异常：', err);
   } finally {
-    // ★ 核心优化：无论成功还是失败，只要请求结束，按钮必须解锁！
     btn.disabled = false;
     btn.innerText = mode === 'login' ? '登 录' : '注 册';
   }
 }
 
-/* ══════════ 登录后的智能同步逻辑（极简静默版） ══════════ */
+/* ══════════ 登录后的同步：走统一入口 ══════════ */
 async function handlePostLoginSync() {
-  showToast('正在检查云端数据...', 2000);
-  
-  let cloudData = null;
-  let retries = 0;
-  
-  // 最多重试6次（等待3秒），解决 Supabase 登录状态延迟导致的自动拉取失败！
-  while (!cloudData && retries < 6) {
-    const { data, error } = await supabaseClient.from('user_data').select('id').limit(1).maybeSingle();
-    if (data) {
-      cloudData = data;
-      break;
-    }
-    await new Promise(r => setTimeout(r, 500)); // 等500毫秒再试
-    retries++;
-  }
-
-  if (cloudData) {
-    // 找到云端数据，直接静默拉取，不弹框！
-    showToast('正在从云端同步数据到本机...', 3000);
-    await doCoverLocalInternal();
-  } else {
-    // 等了三秒还没数据，说明是全新用户
-    if (confirm('检测到您是本机首次登录，是否将本机当前数据上传到云端备份？\n\n选择“取消”则仅登录，不上传。')) {
-      await doCoverCloudInternal();
-    } else {
-      showToast('已跳过数据上传。数据仅保存在本机。', 3000);
-    }
-  }
+  await handleStartupSync(true);
 }
 
 async function doAccountLogout() {
@@ -25324,41 +25647,150 @@ async function submitForgotPassword() {
   }
 }
 /* ═══════════════════════════════════════════════════════
-   [多设备无缝同步] 页面激活时自动拉取云端最新数据
+   [启动 / 登录 / 切屏] 统一同步逻辑
    ═══════════════════════════════════════════════════════ */
 
-async function checkAndSyncOnLoad() {
+// 判断本次页面加载是不是“新打开”（关标签页 / 关浏览器再打开）
+// 刷新（F5）、后退、前进 都不算“新打开”
+function isNewPageOpen() {
+  try {
+    const entries = performance.getEntriesByType('navigation');
+    if (entries && entries.length > 0) {
+      return entries[0].type === 'navigate';
+    }
+    if (window.performance && performance.navigation) {
+      return performance.navigation.type === 0; // TYPE_NAVIGATE
+    }
+  } catch (e) {}
+  return false;
+}
+
+// 统一入口：新打开 / 登录 都走这里
+async function handleStartupSync(isNewOpen) {
   if (!initCloud()) return;
-  // 检查是否处于已登录状态
   const { data: { session } } = await supabaseClient.auth.getSession();
-  if (session) {
-    currentUser = session.user;
-    // 页面载入或切回时，静默拉取云端最新数据
-    // 注意：这里直接调 doCoverLocalInternal，不会弹框，不会打扰用户
-    await doCoverLocalInternal();
+  if (!session) return;
+  currentUser = session.user;
+
+  // 有未上传数据
+  if (hasPendingFlag() || window.__hasUnsavedChanges) {
+    window.__hasUnsavedChanges = true;
+    setPendingFlag(true);
+    if (isNewOpen) {
+      // 新打开 / 登录：弹窗询问用户
+      showPendingUploadPrompt();
+    } else {
+      // 刷新 / 切屏：静默重试上传
+      await commitSyncNow(true);
+    }
+    return;
+  }
+
+  // 新打开 + 无未上传 → 拉云端覆盖本地
+  if (isNewOpen) {
+    try {
+      const { data } = await supabaseClient.from('user_data').select('id').eq('user_id', session.user.id).maybeSingle();
+      if (data) {
+        showToast('正在同步云端最新数据...', 2000);
+        await doCoverLocalInternal(true);
+      } else {
+        showToast('云端暂无备份数据。', 3000);
+      }
+    } catch (e) {
+      console.warn('[启动同步] 拉云端失败', e);
+    }
+  }
+  // 刷新 / 切屏 + 无未上传 → 什么都不做
+}
+
+// 弹窗：询问用户“上次数据未上传，是否上传”
+function showPendingUploadPrompt() {
+  (async function () {
+    let cloudHasData = false;
+    try {
+      if (supabaseClient) {
+        const { data: { session } } = await supabaseClient.auth.getSession();
+        if (session) {
+          const { data } = await supabaseClient.from('user_data').select('id').eq('user_id', session.user.id).maybeSingle();
+          cloudHasData = !!data;
+        }
+      }
+    } catch (e) {}
+
+    const modalHtml = `
+      <div class="modal-overlay">
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-head">
+            <h3>上次操作未成功上传</h3>
+          </div>
+          <div class="modal-body">
+            <p style="margin:8px 0;line-height:1.7;">
+              检测到上次有操作没有成功上传到云端。<br>
+              请选择如何处理：
+            </p>
+            <p style="font-size:12px;color:var(--ink-soft);margin:0 0 16px;line-height:1.8;">
+              ${cloudHasData ? '云端已有备份数据。' : '云端暂无备份数据。'}<br>
+              · 上传本地 = 用本地最新数据覆盖云端<br>
+              · 不上传 = 丢弃本地未上传数据，从云端拉取
+            </p>
+            <div class="actions" style="justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+              <button class="action-btn ghost" onclick="onPendingUploadChoice(false)">不上传，拉取云端</button>
+              <button class="action-btn" onclick="onPendingUploadChoice(true)">上传本地覆盖云端</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    document.getElementById('modalRoot').innerHTML = modalHtml;
+  })();
+}
+
+// 用户对“上次未上传”弹窗的选择
+async function onPendingUploadChoice(doUpload) {
+  document.getElementById('modalRoot').innerHTML = '';
+
+  if (doUpload) {
+    window.__hasUnsavedChanges = true;
+    setPendingFlag(true);
+    const ok = await commitSyncNow();
+    if (!ok) {
+      showToast('本地数据上传失败，已保留本地数据。网络恢复后会自动重试。', 5000);
+      return;
+    }
+  }
+
+  // 上传成功 或 用户选择不上传 → 拉云端
+  try {
+    const { data } = await supabaseClient.from('user_data').select('id').limit(1).maybeSingle();
+    if (data) {
+      showToast('正在同步云端最新数据...', 2000);
+      await doCoverLocalInternal(true);
+    } else {
+      showToast('云端暂无数据。', 3000);
+    }
+  } catch (e) {
+    console.warn('[启动同步] 拉云端失败', e);
   }
 }
 
-// 场景1：用户直接打开网页（包含自动登录状态）
+// 页面加载时（新打开/刷新）执行
 window.addEventListener('load', () => {
-  // 延迟 1 秒执行，确保主项目所有的 render 函数已经初始化完毕
-  setTimeout(checkAndSyncOnLoad, 1000);
+  setTimeout(() => {
+    handleStartupSync(isNewPageOpen());
+  }, 1000);
 });
 
-// 场景2：用户从别的 APP 切回浏览器（手机端极其常见）
+// 切屏处理：回来不拉云端，只检查 pending
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    checkAndSyncOnLoad();
+    if (window.__hasUnsavedChanges && currentUser) {
+      commitSyncNow(true);
+    }
+  } else {
+    if (window.__hasUnsavedChanges && currentUser) {
+      doCoverCloudInternal(true);
+    }
   }
-});
-
-// 场景3：用户按 F5 刷新页面（浏览器级别刷新）
-window.addEventListener('focus', () => {
-  // 避免频繁触发，加一个简单的防抖
-  if (window.__focusSyncTimer) clearTimeout(window.__focusSyncTimer);
-  window.__focusSyncTimer = setTimeout(() => {
-    checkAndSyncOnLoad();
-  }, 2000);
 });
 /* ═══════════════════════════════════════════════════════
    [图片清理机制] 删除素材图和要求图，释放云端空间
@@ -25439,9 +25871,11 @@ async function saveBasicSetting() {
   if (typeof syncPlatformsToMain === 'function') syncPlatformsToMain();
   if (typeof syncDepositFromSettings === 'function') syncDepositFromSettings();
 
-  // 2. ★ 手动触发一次云端同步
-  if (typeof currentUser !== 'undefined' && currentUser && typeof doCoverCloudInternal === 'function') {
-    await doCoverCloudInternal();
+  // 2. ★ 手动触发一次云端同步（走新的并发合并机制）
+  if (typeof currentUser !== 'undefined' && currentUser) {
+    window.__hasUnsavedChanges = true;
+    setPendingFlag(true);
+    await commitSyncNow();
   }
 
   // 3. 关闭编辑模式
@@ -25455,7 +25889,7 @@ async function saveBasicSetting() {
 
   document.getElementById('basicSettingEditBtn').style.display = 'block';
   document.getElementById('basicSettingSaveBtn').style.display = 'none';
-  showToast('✅ 基础信息已保存并同步', 3000);
+  showToast('✅ 基础信息已保存', 3000);
 }
 
 function backFromBasicSetting() {
