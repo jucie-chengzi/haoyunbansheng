@@ -8602,8 +8602,50 @@ async function confirmFinalSettle() {
   const t = todos[idx];
   const today = fmtDateStr(new Date());
 
-  /* ★ 原地：把弹窗 C 的内容替换成"正在生成"提示，弹窗不消失 */
   const modalBody = document.querySelector('.settle-final-modal .modal-body');
+  const modalHeadTitle = document.querySelector('.settle-final-modal .modal-head h3');
+  const modalCloseBtn = document.querySelector('.settle-final-modal .modal-head .icon-btn');
+  
+  // ★ 1. 弹出询问预览图的界面
+  if (modalHeadTitle) modalHeadTitle.textContent = '结单小票设置';
+  if (modalCloseBtn) modalCloseBtn.style.display = 'none';
+  if (modalBody) {
+    modalBody.innerHTML = `
+      <div style="text-align:center; padding: 30px 10px;">
+        <p style="margin-bottom: 24px; font-size: 15px; color: var(--ink); font-weight: 600;">是否要在结单小票上添加预览图？</p>
+        <div style="display:flex; gap:12px; justify-content:center;">
+          <button class="action-btn ghost" onclick="window.__finalPreviewResolve(null)">不上传，直接生成</button>
+          <button class="action-btn" onclick="document.getElementById('finalPreviewFile').click()">选择预览图</button>
+        </div>
+        <input type="file" id="finalPreviewFile" accept="image/*" style="display:none;" onchange="window.__finalPreviewFileChange(this)" />
+        <div id="finalPreviewUploading" style="display:none; margin-top:16px; font-size:13px; color:var(--ink-soft);">正在处理图片...</div>
+      </div>
+    `;
+  }
+
+  // 拦截用户的文件选择
+  const previewImageRef = await new Promise((resolve) => {
+    window.__finalPreviewResolve = resolve;
+    window.__finalPreviewFileChange = async (input) => {
+      const file = input.files && input.files[0];
+      if (!file) { resolve(null); return; }
+      
+      const uploadText = document.getElementById('finalPreviewUploading');
+      if (uploadText) uploadText.style.display = 'block';
+
+      try {
+        const ref = await saveImageFromFile(file, 'final_preview');
+        resolve(ref);
+      } catch (e) {
+        console.error('预览图上传失败', e);
+        alert('图片处理失败，将跳过预览图生成。');
+        resolve(null);
+      }
+    };
+  });
+
+  // ★ 2. 恢复“正在生成”的加载界面
+  if (modalHeadTitle) modalHeadTitle.textContent = '结单中';
   if (modalBody) {
     modalBody.innerHTML = `
       <div class="settle-inline-loading">
@@ -8612,16 +8654,21 @@ async function confirmFinalSettle() {
       </div>
     `;
   }
-  const modalHeadTitle = document.querySelector('.settle-final-modal .modal-head h3');
-  if (modalHeadTitle) modalHeadTitle.textContent = '结单中';
-  const modalCloseBtn = document.querySelector('.settle-final-modal .modal-head .icon-btn');
-  if (modalCloseBtn) modalCloseBtn.style.display = 'none';
 
-  /* 等一帧，确保 loading 先渲染出来 */
+  // ★ 3. 如果用户上传了预览图，更新到订单快照里
+  if (previewImageRef) {
+    if (!t.receiptSnapshot) t.receiptSnapshot = {};
+    t.receiptSnapshot.previewImage = previewImageRef;
+    // 把带图的新快照覆盖回原订单
+    todos[idx].receiptSnapshot = t.receiptSnapshot;
+    setTodos(todos);
+  }
+
+  // 等一帧，确保 loading 先渲染出来
   await new Promise(r => requestAnimationFrame(r));
   await new Promise(r => setTimeout(r, 60));
 
-  /* 生成结单小票（失败不阻断结单） */
+  // ★ 4. 生成结单小票（失败不阻断结单）
   let finalReceiptRef = '';
   try {
     finalReceiptRef = await generateFinalReceipt(t, s);
@@ -8629,7 +8676,7 @@ async function confirmFinalSettle() {
     console.warn('结单小票生成失败', e);
   }
 
-  /* 存结单记录 */
+  // 存结单记录
   const completed = addCompleted({
     todoId: t.id,
     clientId: t.clientId || '',
@@ -8656,37 +8703,33 @@ async function confirmFinalSettle() {
 
   if (!completed) { closeModal(); return; }
 
-  /* ★ 新增：如果生成了新的结单小票，顺便把旧的订单小票物理删除，避免多占存储空间 */
+  /* 如果生成了新的结单小票，顺便把旧的订单小票物理删除，避免多占存储空间 */
   if (finalReceiptRef && t.receiptImage && t.receiptImage !== finalReceiptRef) {
     try { await deleteImageRef(t.receiptImage); } catch (e) {}
-    t.receiptImage = finalReceiptRef; // 更新为最新
+    t.receiptImage = finalReceiptRef; 
   }
 
-      /* ★ 核心修复：把预付款和尾款合并成一条“总实收”流水，彻底杜绝统计遗漏 */
-    // 1. 先删除该订单之前残留的预付款和排单费流水
-    removeFlowsByTodoIdAndType(t.id, 'prepaid');
-    removeFlowsByTodoIdAndType(t.id, 'dispatch');
+  /* 把预付款和尾款合并成一条“总实收”流水，彻底杜绝统计遗漏 */
+  removeFlowsByTodoIdAndType(t.id, 'prepaid');
+  removeFlowsByTodoIdAndType(t.id, 'dispatch');
 
-    // 2. 写入一条包含总实收的流水（总实收 = 预付款 + 尾款）
-    if (s.totalReceived > 0) {
-      addFlow('final', s.totalReceived, '实收（预付款+尾款） · ' + (t.clientName || '未命名'), today, {
-        todoId: t.id,
-        completedId: completed.id,
-      });
-    } else if (s.totalReceived < 0) {
-      addFlow('refund', Math.abs(s.totalReceived), '结单退款 · ' + (t.clientName || '未命名'), today, {
-        todoId: t.id,
-        completedId: completed.id,
-      });
-    }
+  if (s.totalReceived > 0) {
+    addFlow('final', s.totalReceived, '实收（预付款+尾款） · ' + (t.clientName || '未命名'), today, {
+      todoId: t.id,
+      completedId: completed.id,
+    });
+  } else if (s.totalReceived < 0) {
+    addFlow('refund', Math.abs(s.totalReceived), '结单退款 · ' + (t.clientName || '未命名'), today, {
+      todoId: t.id,
+      completedId: completed.id,
+    });
+  }
 
-  /* ★ 新增：清理该订单的素材和要求图片（释放云端空间） */
+  /* 清理该订单的素材和要求图片（释放云端空间） */
   cleanupOrderImages(t).catch(e => console.warn(e));
 
   /* 从待办移除 */
-  // ★ 核心修复：重新获取最新的待办，防止在生成小票的几秒钟内产生的新订单被覆盖
-  const currentTodos = getTodos();
-  setTodos(currentTodos.filter(x => x.id !== s.todoId));
+  setTodos(todos.filter(x => x.id !== s.todoId));
 
   window.__settleState = null;
   window.__settleFinalState = null;
@@ -8698,7 +8741,7 @@ async function confirmFinalSettle() {
   if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
 
-  /* 弹结单小票（原地替换 modalRoot，不会有空白瞬间） */
+  /* 弹结单小票 */
   if (finalReceiptRef) {
     openFinalReceiptModal(finalReceiptRef);
   } else {
@@ -12970,8 +13013,40 @@ function renderMasterPlatformSelect() {
   if (cur) sel.value = cur;
 }
 
+// ★ 新增：单主编辑时的快照
+var __masterEditSnapshot = null;
+
+function takeMasterEditSnapshot() {
+  return {
+    clientId: $('mdClientId') ? String($('mdClientId').value || '') : '',
+    platform: $('mdPlatform') ? String($('mdPlatform').value || '') : '',
+    contactType: $('mdContactType') ? String($('mdContactType').value || '') : '',
+    contact: $('mdContact') ? String($('mdContact').value || '') : '',
+    note: $('mdNote') ? String($('mdNote').value || '') : '',
+    tags: $('mdTags') ? String($('mdTags').value || '') : ''
+  };
+}
+
+function isMasterEditDirty() {
+  if (!__masterEditSnapshot) return false;
+  const cur = takeMasterEditSnapshot();
+  const old = __masterEditSnapshot;
+  return cur.clientId !== old.clientId
+      || cur.platform !== old.platform
+      || cur.contactType !== old.contactType
+      || cur.contact !== old.contact
+      || cur.note !== old.note
+      || cur.tags !== old.tags;
+}
+
 function setMasterEditMode(on) {
   __masterEditMode = !!on;
+
+  if (on) {
+    __masterEditSnapshot = takeMasterEditSnapshot();
+  } else {
+    __masterEditSnapshot = null;
+  }
 
   const editableInputIds = ['mdClientId', 'mdContact', 'mdNote', 'mdTags'];
   editableInputIds.forEach(id => {
@@ -13095,8 +13170,18 @@ function saveMasterDetail() {
   setMasterEditMode(false);
   showSimpleAlert('已保存', '单主信息已更新，相关订单的联系方式已同步。');
 
-  openMasterDetail(__currentMasterKey);
-  renderMasterList();
+  // ★ 判断是不是从“保存并返回”按钮点进来的
+  if (window.__masterLeaveAfterSave) {
+    window.__masterLeaveAfterSave = false;
+    __currentMasterKey = null;
+    __masterEditMode = false;
+    __masterEditSnapshot = null;
+    renderMasterList();
+    showPage('pageMaster');
+  } else {
+    openMasterDetail(__currentMasterKey);
+    renderMasterList();
+  }
   
   // 触发自动同步云端
   window.__hasUnsavedChanges = true;
@@ -13105,10 +13190,101 @@ function saveMasterDetail() {
 }
 
 function backToMasterList() {
+  // ★ 核心新增：编辑模式下有未保存修改 → 弹确认框
+  if (__masterEditMode && isMasterEditDirty()) {
+    showMasterLeaveConfirm();
+    return;
+  }
+
   __currentMasterKey = null;
   __masterEditMode = false;
+  __masterEditSnapshot = null;
   renderMasterList();
   showPage('pageMaster');
+}
+
+// ★ 新增：三选确认框
+function showMasterLeaveConfirm() {
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>未保存的修改</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;line-height:1.7;">检测到单主信息有改动，要保存吗？</p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn ghost" style="border-color:var(--red);color:var(--red);" onclick="confirmMasterLeaveDiscard()">放弃修改</button>
+            <button class="action-btn" onclick="confirmMasterLeaveSave()">保存并返回</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function confirmMasterLeaveDiscard() {
+  closeModal();
+  __currentMasterKey = null;
+  __masterEditMode = false;
+  __masterEditSnapshot = null;
+  renderMasterList();
+  showPage('pageMaster');
+}
+
+function confirmMasterLeaveSave() {
+  closeModal();
+  // saveMasterDetail 里面会自动处理 setMasterEditMode(false) 和清空 snapshot
+  saveMasterDetail();
+}function backToMasterList() {
+  // ★ 核心新增：编辑模式下有未保存修改 → 弹确认框
+  if (__masterEditMode && isMasterEditDirty()) {
+    showMasterLeaveConfirm();
+    return;
+  }
+
+  __currentMasterKey = null;
+  __masterEditMode = false;
+  __masterEditSnapshot = null;
+  renderMasterList();
+  showPage('pageMaster');
+}
+
+function showMasterLeaveConfirm() {
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>未保存的修改</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;line-height:1.7;">检测到单主信息有改动，要保存吗？</p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;flex-wrap:wrap;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn ghost" style="border-color:var(--red);color:var(--red);" onclick="confirmMasterLeaveDiscard()">放弃修改</button>
+            <button class="action-btn" onclick="confirmMasterLeaveSave()">保存并返回</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function confirmMasterLeaveDiscard() {
+  closeModal();
+  __currentMasterKey = null;
+  __masterEditMode = false;
+  __masterEditSnapshot = null;
+  renderMasterList();
+  showPage('pageMaster');
+}
+
+function confirmMasterLeaveSave() {
+  closeModal();
+  // ★ 核心标记：保存后直接返回列表
+  window.__masterLeaveAfterSave = true;
+  saveMasterDetail();
 }
 
 function copyMasterContact() {
