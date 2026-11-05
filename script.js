@@ -230,8 +230,9 @@ function makePriceListPresetId() { return 'plp_' + Date.now() + '_' + __nextIdSe
 
 function normalizeContactType(t) {
   const s = String(t || '').trim().toUpperCase();
+  if (s === 'QQ' || s === 'QQ号') return 'QQ';
   if (s === 'VX' || s === 'WX' || s === 'WECHAT' || s === '微信') return 'VX';
-  return 'QQ';
+  return 'VX'; // ★ 默认改为 VX
 }
 
 function formatContactFull(type, account) {
@@ -6627,16 +6628,26 @@ function saveTodoDetail() {
   const idx = todos.findIndex(x => x.id === __currentTodoId);
   if (idx < 0) return;
 
-  todos[idx].clientId = $('tdClientId').value.trim();
+  const cid = $('tdClientId').value.trim();
+  const ctType = $('tdContactType') ? normalizeContactType($('tdContactType').value) : 'VX';
+  const ctVal = $('tdContact').value.trim();
+
+  todos[idx].clientId = cid;
   todos[idx].platform = $('tdPlatform').value.trim();
-  todos[idx].contactType = $('tdContactType') ? normalizeContactType($('tdContactType').value) : 'QQ';
-  todos[idx].contact  = $('tdContact').value.trim();
+  todos[idx].contactType = ctType;
+  todos[idx].contact  = ctVal;
   todos[idx].deadline = $('tdDeadline').value;
   todos[idx].note     = $('tdNote').value;
-  todos[idx].clientName = todos[idx].clientId || todos[idx].clientName || '未命名';
+  todos[idx].clientName = cid || todos[idx].clientName || '未命名';
   todos[idx].updatedAt = Date.now();
 
   setTodos(todos);
+  
+  // ★ 新增：同步更新单主档案的全局联系方式
+  if (cid) {
+    setMasterOverride(cid, { contact: ctVal, contactType: ctType });
+  }
+  
   setTodoEditMode(false);
 
   /* 刷新标题和剩余天数 */
@@ -6648,6 +6659,11 @@ function saveTodoDetail() {
   if (typeof renderSchedule === 'function') renderSchedule();
   if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
+  
+  // 触发自动同步
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  commitSyncNow();
 }
 
 function backToTodoList() {
@@ -7133,7 +7149,9 @@ function captureReceiptFormSnapshot() {
     algorithmSettings: getAlgorithmSettings(),
     depositEnabled: isDepositEnabled(),
     prepaidConfig: JSON.parse(JSON.stringify(getPrepaidConfig())),
-    orderServiceFee: getOrderServiceFeeConfig()
+    orderServiceFee: getOrderServiceFeeConfig(),
+    // ★ 新增：保存当前的小票版式设置（外观、位置、背景等）
+    receiptSettingsSnapshot: JSON.parse(JSON.stringify(getReceiptSettings()))
   };
 }
 
@@ -8724,7 +8742,16 @@ async function generateFinalReceipt(todo, settleState) {
   const originalNextSibling = receiptEl.nextSibling;
   let offscreen = null;
 
+  // ★ 核心修复：备份当前的全局小票设置
+  const backupSettings = getReceiptSettings();
+
   try {
+    // ★ 核心修复：临时替换为该订单当初保存的版式设置
+    if (todo.receiptSnapshot && todo.receiptSnapshot.receiptSettingsSnapshot) {
+      setReceiptSettings(todo.receiptSnapshot.receiptSettingsSnapshot);
+      applyReceiptSettings();
+    }
+
     /* 1. 把订单快照写进小票页的 DOM */
     if (todo.receiptSnapshot) {
       restoreReceiptFormSnapshot(todo.receiptSnapshot);
@@ -8872,6 +8899,10 @@ async function generateFinalReceipt(todo, settleState) {
 
     /* 13. 恢复用户小票页数据 */
     try {
+      // ★ 恢复全局设置
+      setReceiptSettings(backupSettings);
+      applyReceiptSettings();
+
       restoreReceiptFormSnapshot(backupSnap);
       window.__editingTodoId = backupEditingId;
       window.__currentOrderNo = backupOrderNo;
@@ -12974,7 +13005,7 @@ function saveMasterDetail() {
 
   const newClientId = ($('mdClientId').value || '').trim();
   const platform = ($('mdPlatform').value || '').trim();
-  const contactType = $('mdContactType') ? normalizeContactType($('mdContactType').value) : 'QQ';
+  const contactType = $('mdContactType') ? normalizeContactType($('mdContactType').value) : 'VX';
   const contact  = ($('mdContact').value  || '').trim();
   const note     = ($('mdNote').value     || '').trim();
   const tags     = ($('mdTags').value     || '').trim();
@@ -13005,8 +13036,6 @@ function saveMasterDetail() {
     if (oldClientId) {
       deleteManualMaster(oldClientId);
       deleteMasterOverride(oldClientId);
-      /* ★ 关键修复：把旧 ID 从隐藏列表里恢复，
-         避免用户改回旧 ID 时发现单主消失了 */
       unhideMaster(oldClientId);
     }
 
@@ -13030,11 +13059,49 @@ function saveMasterDetail() {
     unhideMaster(oldClientId);
   }
 
+  // ★ 新增：把新的联系方式反向同步给所有相关订单、结单、撤单、废稿记录
+  if (oldClientId) {
+    const syncContacts = (arr) => {
+      let changed = false;
+      arr.forEach(item => {
+        if (item.clientId === oldClientId || item.clientId === newClientId) {
+          if (item.contact !== contact || item.contactType !== contactType) {
+            item.contact = contact;
+            item.contactType = contactType;
+            changed = true;
+          }
+        }
+      });
+      return changed;
+    };
+
+    const todos = getTodos();
+    if (syncContacts(todos)) {
+      // 也同步修改一下 updatedAt
+      todos.forEach(t => { if (t.clientId === oldClientId || t.clientId === newClientId) t.updatedAt = Date.now(); });
+      setTodos(todos);
+    }
+    
+    const completed = getCompleted();
+    if (syncContacts(completed)) setCompleted(completed);
+    
+    const cancelled = getCancelled();
+    if (syncContacts(cancelled)) setCancelled(cancelled);
+    
+    const discarded = getDiscarded();
+    if (syncContacts(discarded)) setDiscarded(discarded);
+  }
+
   setMasterEditMode(false);
-  showSimpleAlert('已保存', '单主信息已更新。');
+  showSimpleAlert('已保存', '单主信息已更新，相关订单的联系方式已同步。');
 
   openMasterDetail(__currentMasterKey);
   renderMasterList();
+  
+  // 触发自动同步云端
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  commitSyncNow();
 }
 
 function backToMasterList() {
@@ -25308,7 +25375,7 @@ function showAuthDiagnoseModal() {
   const pwdVal = document.getElementById('authPassword') ? document.getElementById('authPassword').value.trim() : '';
 
   $('modalRoot').innerHTML = `
-    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+    <div class="modal-overlay">
       <div class="modal" style="max-width: 440px;" onclick="event.stopPropagation()">
         <div class="modal-head">
           <h3>网络与账号诊断</h3>
@@ -25411,7 +25478,7 @@ async function startAuthDiagnose() {
 function openAuthModal(mode) {
   window.__authMode = mode;
   const modalHTML = `
-    <div class="modal-overlay" onclick="if(event.target===this)closeAuthModal()">
+    <div class="modal-overlay">
       <div class="modal" style="max-width: 400px;" onclick="event.stopPropagation()">
         <div class="modal-head">
           <h3 id="authModalTitle">${mode === 'login' ? '登录' : '注册'}</h3>
@@ -25599,7 +25666,7 @@ function hideAccountLogin() {}
 /* ══════════ 找回密码功能 ══════════ */
 function showForgotPasswordModal() {
   const modalHTML = `
-    <div class="modal-overlay" onclick="if(event.target===this)closeForgotModal()">
+    <div class="modal-overlay">
       <div class="modal" style="max-width: 400px;" onclick="event.stopPropagation()">
         <div class="modal-head">
           <h3>找回密码</h3>
