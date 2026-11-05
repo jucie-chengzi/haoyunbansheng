@@ -1569,7 +1569,7 @@
       </section>
     </section>
 
-    <section class="page" id="pageBasicSetting">
+       <section class="page" id="pageBasicSetting">
       <div class="page-head">
         <h1>基础信息</h1>
         <div style="display:flex; gap:10px;">
@@ -1582,11 +1582,11 @@
         <div class="module" style="grid-template-columns: 1fr 1fr;">
           <div>
             <label>身份</label>
-            <select id="setIdentity"></select>
+            <select id="setIdentity" disabled></select>
           </div>
           <div>
             <label>ID</label>
-            <input id="setName" />
+            <input id="setName" disabled />
           </div>
         </div>
         <p class="setting-hint" id="setIdentityHint">身份通过下方预设增删。</p>
@@ -1599,14 +1599,14 @@
 
         <div style="margin-top:24px;">
           <label style="margin-top:0;">接单平台（主页默认选中此项）</label>
-          <select id="setPlatform" onchange="onSetPlatformChange()"></select>
+          <select id="setPlatform" disabled></select>
           <p class="setting-hint">下拉最后一项「＋ 添加平台」可打开管理窗口。</p>
         </div>
 
         <div class="module" style="grid-template-columns: 1fr 1fr; margin-top:24px;">
           <div>
             <label style="margin-top:0;">定金预设模式</label>
-            <select id="setDepositMode">
+            <select id="setDepositMode" disabled>
               <option value="percent">百分比 %</option>
               <option value="amount">固定金额 ¥</option>
             </select>
@@ -1614,47 +1614,7 @@
           <div>
             <label style="margin-top:0;">定金预设数值</label>
             <div class="input-unit-wrap suffix" id="setDepositWrap">
-              <input id="setDeposit" type="number" step="0.01" value="20" />
-              <span class="input-unit" id="setDepositUnit">%</span>
-            </div>
-          </div>
-        </div>        <div class="module" style="grid-template-columns: 1fr 1fr;">
-          <div>
-            <label>身份</label>
-            <select id="setIdentity"></select>
-          </div>
-          <div>
-            <label>ID</label>
-            <input id="setName" />
-          </div>
-        </div>
-
-        <p class="setting-hint" id="setIdentityHint">身份通过下方预设增删。</p>
-
-        <div style="margin-top:24px;">
-          <label style="margin-top:0;">身份预设（可增删、可改名称）</label>
-          <div id="identityList"></div>
-          <button class="add-item-btn" onclick="openAddIdentityModal()" style="margin-top:6px;">+ 添加身份</button>
-        </div>
-
-        <div style="margin-top:24px;">
-          <label style="margin-top:0;">接单平台（主页默认选中此项）</label>
-          <select id="setPlatform"></select>
-          <p class="setting-hint">下拉最后一项「＋ 添加平台」可打开管理窗口。</p>
-        </div>
-
-        <div class="module" style="grid-template-columns: 1fr 1fr; margin-top:24px;">
-          <div>
-            <label style="margin-top:0;">定金预设模式</label>
-            <select id="setDepositMode">
-              <option value="percent">百分比 %</option>
-              <option value="amount">固定金额 ¥</option>
-            </select>
-          </div>
-          <div>
-            <label style="margin-top:0;">定金预设数值</label>
-            <div class="input-unit-wrap suffix" id="setDepositWrap">
-              <input id="setDeposit" type="number" step="0.01" value="20" />
+              <input id="setDeposit" type="number" step="0.01" value="20" disabled />
               <span class="input-unit" id="setDepositUnit">%</span>
             </div>
           </div>
