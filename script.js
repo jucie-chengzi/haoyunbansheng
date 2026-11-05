@@ -1422,12 +1422,10 @@ function isFileIdRef(ref) {
         || s.indexOf('http') === 0);
 }
 
-/* ---------- 核心：前端图片 WebP 压缩引擎 ---------- */
+/* ---------- 核心：前端图片 WebP 强制压缩引擎 ---------- */
 async function compressImageToWebP(file, maxWidth = 1200, quality = 0.8) {
   return new Promise((resolve) => {
     if (!file || !/^image\//.test(file.type)) { resolve(file); return; }
-    // 如果原图很小（小于150KB），直接返回原图，不折腾
-    if (file.size <= 150 * 1024) { resolve(file); return; }
 
     const reader = new FileReader();
     reader.onload = function(e) {
@@ -1450,18 +1448,16 @@ async function compressImageToWebP(file, maxWidth = 1200, quality = 0.8) {
         // 处理EXIF方向（防止手机照片横过来）
         ctx.drawImage(img, 0, 0, width, height);
 
-        // 转换为 WebP Blob
+        // 强制转换为 WebP Blob，无论原图大小
         canvas.toBlob((blob) => {
-          if (blob && blob.size < file.size) {
-            // 压缩成功，且比原图小，使用压缩后的图
+          if (blob) {
             resolve(blob);
           } else {
-            // 压缩失败，或者比原图大，直接用原图
             resolve(file);
           }
-        }, 'image/webp', quality); // 压缩为 WebP 格式
+        }, 'image/webp', quality);
       };
-      img.onerror = () => resolve(file); // 加载失败，原图兜底
+      img.onerror = () => resolve(file);
       img.src = e.target.result;
     };
     reader.onerror = () => resolve(file);
@@ -1777,11 +1773,12 @@ async function regenerateOneTodoReceipt(todo) {
       useCORS: true,
     });
     restoreAllReceiptHandles(handleState);
-    const dataUrl = canvas.toDataURL('image/png');
+    // ★ 改用 WebP 格式
+    const dataUrl = canvas.toDataURL('image/webp', 0.85);
 
     const blob = dataURLToBlob(dataUrl);
     if (!blob) return '';
-    return (await saveImageBlob(blob, 'receipt_' + (todo.orderNo || '') + '.png')) || '';
+    return (await saveImageBlob(blob, 'receipt_' + (todo.orderNo || '') + '.webp')) || '';
   } catch (e) {
     console.warn('重生成小票失败', e);
     return '';
@@ -6946,12 +6943,23 @@ async function deleteTodoThumb(kind, fileId) {
   todos[idx].updatedAt = Date.now();
   setTodos(todos);
 
+  // ★ 核心：确保调用 deleteImageRef 物理删除云端文件
   if (target) {
     const ref = target.fileRef || target.dataUrl;
     if (ref) {
-      try { await deleteImageRef(ref); } catch (e) {}
+      try { 
+        await deleteImageRef(ref); 
+        console.log('素材/要求图已彻底从云端删除');
+      } catch (e) {
+        console.warn('删除素材图失败', e);
+      }
     }
   }
+
+  // 触发云端同步更新
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  commitSyncNow(true);
 
   renderTodoThumbs(kind, todos[idx][key]);
 }
@@ -7540,7 +7548,7 @@ async function importToTodo() {
     console.warn('金额计算失败', e);
   }
 
-  /* 5. 截小票图 */
+  /* 5. 截小票图（转 WebP） */
   let receiptImageRef = '';
   try {
     const handleState = hideAllReceiptHandles();
@@ -7550,12 +7558,13 @@ async function importToTodo() {
       backgroundColor: '#ffffff',
       useCORS: true,
     });
-    const dataUrl = canvas.toDataURL('image/png');
+    // ★ 改用 WebP 格式
+    const dataUrl = canvas.toDataURL('image/webp', 0.85);
     restoreAllReceiptHandles(handleState);
 
     const blob = dataURLToBlob(dataUrl);
     if (blob) {
-      const ref = await saveImageBlob(blob, 'receipt_' + (orderDateVal || '') + '.png');
+      const ref = await saveImageBlob(blob, 'receipt_' + (orderDateVal || '') + '.webp');
       if (ref) receiptImageRef = ref;
     }
   } catch (e) {
@@ -8912,7 +8921,8 @@ async function generateFinalReceipt(todo, settleState) {
       useCORS: true,
     });
     restoreAllReceiptHandles(handleState);
-    const dataUrl = canvas.toDataURL('image/png');
+    // ★ 改用 WebP 格式
+    const dataUrl = canvas.toDataURL('image/webp', 0.85);
 
     /* 9. 恢复付款区 */
     if (payTotals && originalPayHTML) {
@@ -8922,7 +8932,7 @@ async function generateFinalReceipt(todo, settleState) {
     /* 10. 存图 */
     const blob = dataURLToBlob(dataUrl);
     if (!blob) return '';
-    const ref = await saveImageBlob(blob, 'final_receipt_' + (todo.orderNo || '') + '.png');
+    const ref = await saveImageBlob(blob, 'final_receipt_' + (todo.orderNo || '') + '.webp');
     return ref || '';
   } catch (e) {
     console.warn('generateFinalReceipt 失败', e);
