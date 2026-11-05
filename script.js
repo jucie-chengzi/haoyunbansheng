@@ -13039,9 +13039,38 @@ function isMasterEditDirty() {
       || cur.tags !== old.tags;
 }
 
+// ★ 新增：单主编辑时的快照（全局定义，防止报错）
+var __masterEditSnapshot = null;
+
+function takeMasterEditSnapshot() {
+  return {
+    clientId: $('mdClientId') ? String($('mdClientId').value || '') : '',
+    platform: $('mdPlatform') ? String($('mdPlatform').value || '') : '',
+    contactType: $('mdContactType') ? String($('mdContactType').value || '') : '',
+    contact: $('mdContact') ? String($('mdContact').value || '') : '',
+    note: $('mdNote') ? String($('mdNote').value || '') : '',
+    tags: $('mdTags') ? String($('mdTags').value || '') : ''
+  };
+}
+
+function isMasterEditDirty() {
+  if (!__masterEditSnapshot) return false;
+  const cur = takeMasterEditSnapshot();
+  const old = __masterEditSnapshot;
+  return cur.clientId !== old.clientId
+      || cur.platform !== old.platform
+      || cur.contactType !== old.contactType
+      || cur.contact !== old.contact
+      || cur.note !== old.note
+      || cur.tags !== old.tags;
+}
+
+function toggleMasterEdit() { setMasterEditMode(true); }
+
 function setMasterEditMode(on) {
   __masterEditMode = !!on;
-
+  
+  // 进入编辑时拍快照，退出时清空
   if (on) {
     __masterEditSnapshot = takeMasterEditSnapshot();
   } else {
@@ -26358,3 +26387,88 @@ function autoFixHistoricalFlows() {
     localStorage.setItem('listReceiptFlowFixVersion', 'v5');
   }
 }
+/* ══════════ 历史数据修复：单主联系方式全量对齐 ══════════ */
+(async function syncHistoricalMasterContacts() {
+  // 等待页面加载完成和数据初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => setTimeout(runSync, 2000));
+  } else {
+    setTimeout(runSync, 2000);
+  }
+
+  function runSync() {
+    if (typeof getMasterList !== 'function' || typeof getTodos !== 'function') return;
+    console.log('开始同步历史单主联系方式...');
+    
+    const masters = getMasterList();
+    if (!masters.length) return;
+
+    let changedTodos = false;
+    let changedCompleted = false;
+    let changedCancelled = false;
+    let changedDiscarded = false;
+
+    // 1. 对齐待办
+    const todos = getTodos();
+    todos.forEach(t => {
+      const m = masters.find(x => x.clientId === t.clientId);
+      if (m && m.contact && (t.contact !== m.contact || t.contactType !== m.contactType)) {
+        t.contact = m.contact;
+        t.contactType = m.contactType;
+        changedTodos = true;
+      }
+    });
+    if (changedTodos) setTodos(todos);
+
+    // 2. 对齐结单
+    const completed = getCompleted();
+    completed.forEach(c => {
+      const m = masters.find(x => x.clientId === c.clientId);
+      if (m && m.contact && (c.contact !== m.contact || c.contactType !== m.contactType)) {
+        c.contact = m.contact;
+        c.contactType = m.contactType;
+        changedCompleted = true;
+      }
+    });
+    if (changedCompleted) setCompleted(completed);
+
+    // 3. 对齐撤单
+    const cancelled = getCancelled();
+    cancelled.forEach(c => {
+      const m = masters.find(x => x.clientId === c.clientId);
+      if (m && m.contact && (c.contact !== m.contact || c.contactType !== m.contactType)) {
+        c.contact = m.contact;
+        c.contactType = m.contactType;
+        changedCancelled = true;
+      }
+    });
+    if (changedCancelled) setCancelled(cancelled);
+
+    // 4. 对齐废稿
+    const discarded = getDiscarded();
+    discarded.forEach(c => {
+      const m = masters.find(x => x.clientId === c.clientId);
+      if (m && m.contact && (c.contact !== m.contact || c.contactType !== m.contactType)) {
+        c.contact = m.contact;
+        c.contactType = m.contactType;
+        changedDiscarded = true;
+      }
+    });
+    if (changedDiscarded) setDiscarded(discarded);
+
+    // 如果有变化，触发同步云端
+    if (changedTodos || changedCompleted || changedCancelled || changedDiscarded) {
+      console.log('✅ 历史单主联系方式已自动对齐！');
+      if (typeof currentUser !== 'undefined' && currentUser) {
+        if (typeof window.__hasUnsavedChanges !== 'undefined') window.__hasUnsavedChanges = true;
+        if (typeof setPendingFlag === 'function') setPendingFlag(true);
+        if (typeof commitSyncNow === 'function') commitSyncNow(true);
+      }
+      // 刷新列表
+      if (typeof renderTodoList === 'function') renderTodoList();
+      if (typeof renderCompletedList === 'function') renderCompletedList();
+      if (typeof renderCancelledList === 'function') renderCancelledList();
+      if (typeof renderDiscardedList === 'function') renderDiscardedList();
+    }
+  }
+})();
