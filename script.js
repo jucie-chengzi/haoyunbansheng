@@ -8615,7 +8615,7 @@ async function confirmFinalSettle() {
   const modalHeadTitle = document.querySelector('.settle-final-modal .modal-head h3');
   const modalCloseBtn = document.querySelector('.settle-final-modal .modal-head .icon-btn');
   
-  // ★ 1. 弹出询问预览图的界面
+  // 1. 弹出询问预览图的界面
   if (modalHeadTitle) modalHeadTitle.textContent = '结单小票设置';
   if (modalCloseBtn) modalCloseBtn.style.display = 'none';
   if (modalBody) {
@@ -8653,7 +8653,7 @@ async function confirmFinalSettle() {
     };
   });
 
-  // ★ 2. 恢复“正在生成”的加载界面
+  // 2. 恢复“正在生成”的加载界面
   if (modalHeadTitle) modalHeadTitle.textContent = '结单中';
   if (modalBody) {
     modalBody.innerHTML = `
@@ -8664,11 +8664,13 @@ async function confirmFinalSettle() {
     `;
   }
 
-  // ★ 3. 如果用户上传了预览图，更新到订单快照里
+  // ★ 核心修复：保护快照不被空对象覆盖
   if (previewImageRef) {
-    if (!t.receiptSnapshot) t.receiptSnapshot = {};
+    if (!t.receiptSnapshot || typeof t.receiptSnapshot !== 'object' || Object.keys(t.receiptSnapshot).length === 0) {
+      // 如果快照烂了，尝试重建一份
+      t.receiptSnapshot = captureReceiptFormSnapshot();
+    }
     t.receiptSnapshot.previewImage = previewImageRef;
-    // 把带图的新快照覆盖回原订单
     todos[idx].receiptSnapshot = t.receiptSnapshot;
     setTodos(todos);
   }
@@ -8677,12 +8679,19 @@ async function confirmFinalSettle() {
   await new Promise(r => requestAnimationFrame(r));
   await new Promise(r => setTimeout(r, 60));
 
-  // ★ 4. 生成结单小票（失败不阻断结单）
+  // 3. 生成结单小票
   let finalReceiptRef = '';
   try {
     finalReceiptRef = await generateFinalReceipt(t, s);
   } catch (e) {
     console.warn('结单小票生成失败', e);
+  }
+
+  if (!finalReceiptRef) {
+    // 如果生成失败了（比如数据确实丢了），直接报错，不准把空白图存进结单里！
+    alert('生成结单小票失败：该订单的数据快照可能已损坏，请手动进入订单详情查看是否缺少信息。');
+    closeModal();
+    return;
   }
 
   // 存结单记录
@@ -8712,13 +8721,11 @@ async function confirmFinalSettle() {
 
   if (!completed) { closeModal(); return; }
 
-  /* 如果生成了新的结单小票，顺便把旧的订单小票物理删除，避免多占存储空间 */
   if (finalReceiptRef && t.receiptImage && t.receiptImage !== finalReceiptRef) {
     try { await deleteImageRef(t.receiptImage); } catch (e) {}
     t.receiptImage = finalReceiptRef; 
   }
 
-  /* 把预付款和尾款合并成一条“总实收”流水，彻底杜绝统计遗漏 */
   removeFlowsByTodoIdAndType(t.id, 'prepaid');
   removeFlowsByTodoIdAndType(t.id, 'dispatch');
 
@@ -8734,29 +8741,20 @@ async function confirmFinalSettle() {
     });
   }
 
-  /* 清理该订单的素材和要求图片（释放云端空间） */
   cleanupOrderImages(t).catch(e => console.warn(e));
 
-  /* 从待办移除 */
   setTodos(todos.filter(x => x.id !== s.todoId));
 
   window.__settleState = null;
   window.__settleFinalState = null;
 
-  /* 刷新 */
   renderTodoList();
   if (typeof renderCompletedList === 'function') renderCompletedList();
   if (typeof renderSchedule === 'function') renderSchedule();
   if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
 
-  /* 弹结单小票 */
-  if (finalReceiptRef) {
-    openFinalReceiptModal(finalReceiptRef);
-  } else {
-    closeModal();
-    showSimpleAlert('已结单', '订单已结单，可在「结」页面查看。');
-  }
+  openFinalReceiptModal(finalReceiptRef);
 }
 
 /* 生成结单小票（临时借用小票页 DOM 截图，然后恢复用户原状） */
@@ -8789,6 +8787,13 @@ async function generateFinalReceipt(todo, settleState) {
   /* ★ 拿真实的小票 DOM（不克隆，直接借用） */
   const receiptEl = $('receipt');
   if (!receiptEl) return '';
+
+  // ★ 新增：检查快照是否为空/损坏
+  if (!todo.receiptSnapshot || !todo.receiptSnapshot.groups || todo.receiptSnapshot.groups.length === 0) {
+    if (!confirm('警告：该订单的小票数据快照已丢失或损坏！\n\n直接生成将导致小票内容为空白。\n\n是否继续生成？')) {
+      return '';
+    }
+  }
 
   const originalParent = receiptEl.parentNode;
   const originalNextSibling = receiptEl.nextSibling;
@@ -25493,6 +25498,10 @@ async function doCoverLocalInternal(forceOverwrite) {
 
   requestAnimationFrame(() => {
     showToast('✅ 数据同步成功！正在刷新页面内容...', 3000);
+    
+    // ★ 核心修复：从云端拉取数据后，立刻查杀一遍复活的幽灵单
+    if (typeof autoFixHistoricalFlows === 'function') autoFixHistoricalFlows();
+
     if (typeof renderTodoList === 'function') renderTodoList();
     if (typeof renderMasterList === 'function') renderMasterList();
     if (typeof renderSchedule === 'function') renderSchedule();
@@ -26008,9 +26017,8 @@ async function handleStartupSync(isNewOpen) {
       if (data) {
         showToast('正在同步云端最新数据...', 2000);
         await doCoverLocalInternal(true);
-        setTimeout(() => {
-          if (typeof autoFixHistoricalFlows === 'function') autoFixHistoricalFlows();
-        }, 1000);
+        // ★ 核心修复：拉取成功后，立刻查杀
+        if (typeof autoFixHistoricalFlows === 'function') autoFixHistoricalFlows();
       } else {
         showToast('云端暂无备份数据。', 3000);
       }
@@ -26319,28 +26327,23 @@ function showAlgorithmFormulaModal() {
   document.getElementById('modalRoot').innerHTML = html;
 }
 /* ═══════════════════════════════════════════════════════
-   [数据修复 v5] 彻底清理云端幽灵数据，并强制覆盖
+   [数据修复 v6] 安全清理幽灵数据（随时可调用，不限制次数）
    ═══════════════════════════════════════════════════════ */
 function autoFixHistoricalFlows() {
-  // 版本升级到 v5，强制所有用户重跑一次
-  if (localStorage.getItem('listReceiptFlowFixVersion') === 'v5') return;
-  
   const todos = getTodos();
   const completed = getCompleted();
   const cancelled = getCancelled();
   const discarded = getDiscarded();
-  let flows = getFlows();
   
   let fixedTodos = 0;
-  let fixedFlows = 0;
-
-  // 1. 收集结单/撤单/废稿的 ID
   const settledIds = new Set();
+
+  // 收集所有已结单/撤单/废稿的 ID
   completed.forEach(c => { if (c.todoId) settledIds.add(c.todoId); });
   cancelled.forEach(c => { if (c.todoId) settledIds.add(c.todoId); });
   discarded.forEach(c => { if (c.todoId) settledIds.add(c.todoId); });
 
-  // 2. 清理待办幽灵数据
+  // 只要发现待办里有这些 ID，直接剔除
   const newTodos = todos.filter(t => {
     if (settledIds.has(t.id)) {
       fixedTodos++;
@@ -26349,52 +26352,10 @@ function autoFixHistoricalFlows() {
     return true;
   });
 
-  // 3. 补全遗漏流水
-  completed.forEach(c => {
-    const totalReceived = Number(c.totalReceived) || 0;
-    if (totalReceived <= 0) return;
-    const finalFlows = flows.filter(f => f.completedId === c.id && f.type === 'final');
-    if (finalFlows.length === 1 && Math.abs(Number(finalFlows[0].amount) - totalReceived) <= 0.01) return;
-    
-    flows = flows.filter(f => !(f.completedId === c.id && f.type === 'final'));
-    flows.push({
-      id: makeFlowId(), type: 'final', amount: totalReceived,
-      note: '实收 · ' + (c.clientName || '未命名') + ' [修复]',
-      date: c.completedDate || fmtDateStr(new Date()),
-      todoId: c.todoId || '', completedId: c.id, cancelledId: '', discardedId: '', createdAt: Date.now()
-    });
-    fixedFlows++;
-  });
-
-  // 4. 写入本地并强制上传云端
-  if (fixedTodos > 0 || fixedFlows > 0) {
-    if (fixedTodos > 0) setTodos(newTodos);
-    if (fixedFlows > 0) setFlows(flows);
-    
-    localStorage.setItem('listReceiptFlowFixVersion', 'v5');
-    
-    // 强制触发云端同步
-    if (typeof currentUser !== 'undefined' && currentUser) {
-      window.__hasUnsavedChanges = true;
-      if (typeof setPendingFlag === 'function') setPendingFlag(true);
-      
-      // 延迟 3 秒执行，等页面加载稳定
-      setTimeout(() => {
-        if (typeof doCoverCloudInternal === 'function') {
-          doCoverCloudInternal(true).then(() => {
-            console.log('✅ 幽灵数据已清理，并成功覆盖云端！');
-            if (typeof showToast === 'function') showToast('✅ 历史脏数据已清理并同步云端', 3000);
-          });
-        }
-      }, 3000);
-    }
-    
+  if (fixedTodos > 0) {
+    setTodos(newTodos);
+    console.log(`✅ 成功拦截并清理了 ${fixedTodos} 条复活的幽灵订单。`);
     if (typeof renderTodoList === 'function') renderTodoList();
-    if (typeof renderStatsPage === 'function') renderStatsPage();
-    if (typeof renderCompletedList === 'function') renderCompletedList();
-    console.log(`✅ 修复脚本 v5：清理待办 ${fixedTodos} 条，补全流水 ${fixedFlows} 条。`);
-  } else {
-    localStorage.setItem('listReceiptFlowFixVersion', 'v5');
   }
 }
 /* ══════════ 历史数据修复：单主联系方式全量对齐 ══════════ */
