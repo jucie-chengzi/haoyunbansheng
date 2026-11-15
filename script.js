@@ -3516,6 +3516,7 @@ const CONTENT_OPTIONS_DEFAULT = {
   showGroupOriginal: true,
   showGroupSubtotal: true,
   showOrderSubtotal: true,
+  showGroupTitle: true,
 };
 
 function getContentOptions() {
@@ -3534,6 +3535,7 @@ function fillContentSettingsForm() {
   if ($('rsShowGroupOriginal')) $('rsShowGroupOriginal').checked = !!opts.showGroupOriginal;
   if ($('rsShowGroupSubtotal')) $('rsShowGroupSubtotal').checked = !!opts.showGroupSubtotal;
   if ($('rsShowOrderSubtotal')) $('rsShowOrderSubtotal').checked = !!opts.showOrderSubtotal;
+  if ($('rsShowGroupTitle')) $('rsShowGroupTitle').checked = opts.showGroupTitle !== false;
 }
 
 function onContentSettingChange() {
@@ -3541,6 +3543,7 @@ function onContentSettingChange() {
     showGroupOriginal: !!($('rsShowGroupOriginal') && $('rsShowGroupOriginal').checked),
     showGroupSubtotal: !!($('rsShowGroupSubtotal') && $('rsShowGroupSubtotal').checked),
     showOrderSubtotal: !!($('rsShowOrderSubtotal') && $('rsShowOrderSubtotal').checked),
+    showGroupTitle: !!($('rsShowGroupTitle') && $('rsShowGroupTitle').checked),
   };
   setContentOptions(opts);
   if (window.__receiptGenerated) {
@@ -3549,10 +3552,12 @@ function onContentSettingChange() {
 }
 
 function applySmartSimple() {
+  const currentOpts = getContentOptions(); // 获取当前设置
   setContentOptions({
     showGroupOriginal: false,
     showGroupSubtotal: false,
     showOrderSubtotal: false,
+    showGroupTitle: currentOpts.showGroupTitle // 保持“稿件组名”不变
   });
   fillContentSettingsForm();
   if (window.__receiptGenerated) {
@@ -5682,7 +5687,11 @@ function generate() {
       section.className = 'group-section';
 
       const showLicense = isLicenseEnabled();
-      let html = `<div class="group-section-title">${escapeHtml(groupLabel)}</div>`;
+      let html = '';
+      // ★ 根据开关判断是否显示组名
+      if (getContentOptions().showGroupTitle !== false) {
+        html += `<div class="group-section-title">${escapeHtml(groupLabel)}</div>`;
+      }
       html += `<table class="list"><thead><tr>
         <th>稿件</th><th class="r">单价</th><th class="c">数量</th>${showLicense ? '<th class="c">权限</th>' : ''}<th class="r">小计</th>
       </tr></thead><tbody>`;
@@ -8728,6 +8737,7 @@ async function confirmFinalSettle() {
 
   removeFlowsByTodoIdAndType(t.id, 'prepaid');
   removeFlowsByTodoIdAndType(t.id, 'dispatch');
+  removeFlowsByTodoIdAndType(t.id, 'final');
 
   if (s.totalReceived > 0) {
     addFlow('final', s.totalReceived, '实收（预付款+尾款） · ' + (t.clientName || '未命名'), today, {
@@ -11986,6 +11996,33 @@ var __masterFilter = null;
 var __masterManageMode = false;
 var __masterSelectedKeys = {};
 
+// ★ 新增：单主联系方式隐私模式（默认关闭 = 显示联系方式）
+var __masterPrivacyMode = localStorage.getItem('listReceiptMasterPrivacy') === '1';
+
+function toggleMasterPrivacy() {
+  __masterPrivacyMode = !__masterPrivacyMode;
+  localStorage.setItem('listReceiptMasterPrivacy', __masterPrivacyMode ? '1' : '0');
+  updateMasterPrivacyBtnUI();
+  renderMasterList();
+}
+
+function updateMasterPrivacyBtnUI() {
+  const btn = $('masterPrivacyBtn');
+  if (!btn) return;
+  
+  if (__masterPrivacyMode) {
+    // 闭眼图标
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+    btn.classList.add('is-hidden');
+    btn.title = '显示联系方式';
+  } else {
+    // 睁眼图标
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+    btn.classList.remove('is-hidden');
+    btn.title = '隐藏联系方式';
+  }
+}
+
 /* ★ 订单批量管理状态 */
 var __orderManageState = {
   todo:      { active: false, selected: {} },
@@ -12611,6 +12648,8 @@ function setMasterSort(sort) {
 function renderMasterList() {
   const box = $('masterListContainer');
   if (!box) return;
+  
+  updateMasterPrivacyBtnUI(); // 确保按钮图标与状态一致
 
   const all = getMasterList().filter(m => !isMasterHidden(m.key));
   const q = ($('masterSearch') ? $('masterSearch').value : '').trim().toLowerCase();
@@ -12679,7 +12718,11 @@ function renderMasterList() {
       `<span class="master-card-tag">${escapeHtml(t)}</span>`
     ).join('');
 
-    const contactFull = m.contact ? formatContactFull(m.contactType, m.contact) : '—';
+    let contactFull = m.contact ? formatContactFull(m.contactType, m.contact) : '—';
+    // ★ 如果开启了隐私模式，隐藏联系方式
+    if (__masterPrivacyMode && m.contact) {
+      contactFull = '*** (已隐藏)';
+    }
     const isSelected = !!__masterSelectedKeys[m.key];
 
     /* 管理模式：勾选圈 */
@@ -26525,7 +26568,7 @@ function autoFixHistoricalFlows() {
         id: makeFlowId(),
         type: 'final',
         amount: totalReceived,
-        note: '实收（系统修复） · ' + (c.clientName || '未命名'),
+        note: '实收（预付款+尾款） · ' + (c.clientName || '未命名'),
         date: c.completedDate || fmtDateStr(new Date()),
         todoId: c.todoId || '',
         completedId: c.id,

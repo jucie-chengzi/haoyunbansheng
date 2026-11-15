@@ -9330,3 +9330,32 @@ body.is-preset-dragging {
   width: 18px;
   height: 18px;
 }
+/* ══════════ 单主页面 · 隐私小眼睛 ══════════ */
+.master-privacy-btn {
+  background: transparent;
+  border: none;
+  padding: 4px;
+  margin-left: 4px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s, opacity 0.2s, transform 0.1s;
+  opacity: 0.5;
+  vertical-align: middle;
+}
+.master-privacy-btn:hover {
+  opacity: 1;
+}
+.master-privacy-btn:active {
+  transform: scale(0.9);
+}
+.master-privacy-btn svg {
+  width: 18px;
+  height: 18px;
+}
+.master-privacy-btn.is-hidden {
+  color: var(--red);
+  opacity: 0.8;
+}

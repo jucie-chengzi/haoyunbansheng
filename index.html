@@ -608,6 +608,11 @@
                 <span>总合计</span>
               </label>
 
+              <label class="rs-check-row" style="margin-top: 12px; border-top: 1px dashed var(--line-soft); padding-top: 12px;">
+                <input type="checkbox" id="rsShowGroupTitle" onchange="onContentSettingChange()" />
+                <span>稿件组名</span>
+              </label>
+
               <p class="rs-tip-sm" style="margin-top:16px;">
                 <strong>永远显示</strong>：稿件明细、组合计、订单总价、应付金额。<br>
                 <strong>有值才显示</strong>：附加、折扣、服务费、预付、待结。
@@ -969,7 +974,15 @@
     <!-- 单主 -->
     <section class="page" id="pageMaster">
       <div class="master-head-row">
-        <h1 class="master-head-title">单主<span class="master-count" id="masterCount">（0 位）</span></h1>
+        <h1 class="master-head-title">
+          单主<span class="master-count" id="masterCount">（0 位）</span>
+          <button type="button" class="master-privacy-btn" id="masterPrivacyBtn" onclick="toggleMasterPrivacy()" title="隐藏/显示联系方式">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+              <circle cx="12" cy="12" r="3"></circle>
+            </svg>
+          </button>
+        </h1>
         <div class="master-head-btns">
           <button type="button" class="master-head-btn" onclick="openMasterAddModal()">添加</button>
           <button type="button" class="master-head-btn" onclick="openMasterFilterModal()">筛选</button>
