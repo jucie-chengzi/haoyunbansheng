@@ -10452,12 +10452,68 @@ function renderCancelledList() {
         </div>
       </div>
       <div class="cancelled-card-side${sideClass}">${escapeHtml(sideText)}</div>
+      <button class="completed-card-del" onclick="event.stopPropagation();askDeleteCancelled('${id}')" title="删除">×</button>
     </div>`;
   }).join('') + `</div>`;
 
   updateOrderManageBar('cancelled');
 }
+function askDeleteCancelled(id) {
+  const c = getCancelledById(id);
+  if (!c) return;
 
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>删除撤单记录</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;">请选择删除方式：</p>
+          <p style="font-weight:600;color:var(--ink);margin:0 0 10px;">${escapeHtml(c.clientName || '未命名')}</p>
+          <div style="background: #f7f8fa; border: 1px solid var(--line-soft); padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+            <p style="font-size:12.5px;color:var(--ink);margin:0 0 8px;"><strong>仅删记录：</strong>只删除这条撤单记录，统计流水保留。</p>
+            <p style="font-size:12.5px;color:var(--red);margin:0;"><strong>彻底清除：</strong>连同统计流水一起物理销毁，不可恢复。</p>
+          </div>
+          <div class="actions" style="justify-content:space-between;margin-top:18px;flex-wrap:wrap;gap:10px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <div style="display:flex;gap:8px;">
+              <button class="action-btn ghost" onclick="doDeleteCancelled('${escapeAttr(id)}', false)">仅删记录</button>
+              <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="doDeleteCancelled('${escapeAttr(id)}', true)">彻底清除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteCancelled(id, fullClear) {
+  const c = getCancelledById(id);
+  if (!c) return;
+
+  const list = getCancelled().filter(x => x.id !== id);
+  setCancelled(list);
+  closeModal();
+
+  if (fullClear) {
+    showToast('正在清除相关数据...', 2000);
+    const flows = getFlows().filter(f => f.cancelledId !== id && (c.todoId ? f.todoId !== c.todoId : true));
+    setFlows(flows);
+    if (c.receiptImage) {
+      try { await deleteImageRef(c.receiptImage); } catch (e) {}
+    }
+    showToast('✅ 已彻底清除', 3000);
+  }
+
+  renderCancelledList();
+  if (typeof renderStatsPage === 'function') renderStatsPage();
+  if (typeof renderMasterList === 'function') renderMasterList();
+  
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  commitSyncNow();
+}
 /* ---- 废 页面 ---- */
 function renderDiscardedList() {
   const box = $('discardedListContainer');
@@ -10527,12 +10583,68 @@ function renderDiscardedList() {
         </div>
       </div>
       <div class="discarded-card-side${sideClass}">${escapeHtml(sideText)}</div>
+      <button class="completed-card-del" onclick="event.stopPropagation();askDeleteDiscarded('${id}')" title="删除">×</button>
     </div>`;
   }).join('') + `</div>`;
 
   updateOrderManageBar('discarded');
 }
+function askDeleteDiscarded(id) {
+  const c = getDiscardedById(id);
+  if (!c) return;
 
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>删除废稿记录</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <p style="margin:8px 0;">请选择删除方式：</p>
+          <p style="font-weight:600;color:var(--ink);margin:0 0 10px;">${escapeHtml(c.clientName || '未命名')}</p>
+          <div style="background: #f7f8fa; border: 1px solid var(--line-soft); padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+            <p style="font-size:12.5px;color:var(--ink);margin:0 0 8px;"><strong>仅删记录：</strong>只删除这条废稿记录，统计流水保留。</p>
+            <p style="font-size:12.5px;color:var(--red);margin:0;"><strong>彻底清除：</strong>连同统计流水一起物理销毁，不可恢复。</p>
+          </div>
+          <div class="actions" style="justify-content:space-between;margin-top:18px;flex-wrap:wrap;gap:10px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <div style="display:flex;gap:8px;">
+              <button class="action-btn ghost" onclick="doDeleteDiscarded('${escapeAttr(id)}', false)">仅删记录</button>
+              <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="doDeleteDiscarded('${escapeAttr(id)}', true)">彻底清除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function doDeleteDiscarded(id, fullClear) {
+  const c = getDiscardedById(id);
+  if (!c) return;
+
+  const list = getDiscarded().filter(x => x.id !== id);
+  setDiscarded(list);
+  closeModal();
+
+  if (fullClear) {
+    showToast('正在清除相关数据...', 2000);
+    const flows = getFlows().filter(f => f.discardedId !== id && (c.todoId ? f.todoId !== c.todoId : true));
+    setFlows(flows);
+    if (c.receiptImage) {
+      try { await deleteImageRef(c.receiptImage); } catch (e) {}
+    }
+    showToast('✅ 已彻底清除', 3000);
+  }
+
+  renderDiscardedList();
+  if (typeof renderStatsPage === 'function') renderStatsPage();
+  if (typeof renderMasterList === 'function') renderMasterList();
+  
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  commitSyncNow();
+}
 
 /* ═══════════════════════════════════════════════════════
    [M-07] 详情弹窗
@@ -10776,24 +10888,52 @@ function askDeleteCompleted(id) {
           <button class="icon-btn" onclick="closeModal()">×</button>
         </div>
         <div class="modal-body">
-          <p style="margin:8px 0;">确定删除以下结单记录吗？</p>
-          <p style="font-weight:600;color:var(--ink);margin:0 0 6px;">${escapeHtml(c.clientName || '未命名')}</p>
-          <p style="font-size:12px;color:var(--ink-soft);margin:0;">只删除结单记录，流水不会被删除。</p>
-          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+          <p style="margin:8px 0;">请选择删除方式：</p>
+          <p style="font-weight:600;color:var(--ink);margin:0 0 10px;">${escapeHtml(c.clientName || '未命名')}</p>
+          <div style="background: #f7f8fa; border: 1px solid var(--line-soft); padding: 12px; border-radius: 6px; margin-bottom: 16px;">
+            <p style="font-size:12.5px;color:var(--ink);margin:0 0 8px;"><strong>仅删记录：</strong>只删除这条结单记录，统计流水和票夹里的图片保留。</p>
+            <p style="font-size:12.5px;color:var(--red);margin:0;"><strong>彻底清除：</strong>连同统计流水、票夹里对应的小票图片一起物理销毁，不可恢复。</p>
+          </div>
+          <div class="actions" style="justify-content:space-between;margin-top:18px;flex-wrap:wrap;gap:10px;">
             <button class="action-btn ghost" onclick="closeModal()">取消</button>
-            <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="confirmDeleteCompleted('${escapeAttr(id)}')">确定删除</button>
+            <div style="display:flex;gap:8px;">
+              <button class="action-btn ghost" onclick="doDeleteCompleted('${escapeAttr(id)}', false)">仅删记录</button>
+              <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="doDeleteCompleted('${escapeAttr(id)}', true)">彻底清除</button>
+            </div>
           </div>
         </div>
       </div>
     </div>`;
 }
 
-function confirmDeleteCompleted(id) {
-  const list = getCompleted().filter(c => c.id !== id);
+async function doDeleteCompleted(id, fullClear) {
+  const c = getCompletedById(id);
+  if (!c) return;
+
+  const list = getCompleted().filter(x => x.id !== id);
   setCompleted(list);
   closeModal();
+
+  if (fullClear) {
+    showToast('正在清除相关数据...', 2000);
+    // 1. 删流水
+    const flows = getFlows().filter(f => f.completedId !== id && (c.todoId ? f.todoId !== c.todoId : true));
+    setFlows(flows);
+    // 2. 删小票图片
+    if (c.receiptImage) {
+      try { await deleteImageRef(c.receiptImage); } catch (e) {}
+    }
+    showToast('✅ 已彻底清除', 3000);
+  }
+
   renderCompletedList();
+  if (typeof renderStatsPage === 'function') renderStatsPage();
   if (typeof renderMasterList === 'function') renderMasterList();
+  
+  // 同步云端
+  window.__hasUnsavedChanges = true;
+  setPendingFlag(true);
+  commitSyncNow();
 }
 
 /* 初始化三个列表页的筛选栏 */
