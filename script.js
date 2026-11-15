@@ -26515,13 +26515,13 @@ function showAlgorithmFormulaModal() {
   document.getElementById('modalRoot').innerHTML = html;
 }
 /* ═══════════════════════════════════════════════════════
-   [数据修复 v7] 终极静默清洗引擎（全自动修复幽灵单+流水）
+   [数据修复 v8] 终极静默清洗引擎（全自动修复幽灵单+流水）
    ═══════════════════════════════════════════════════════ */
 function autoFixHistoricalFlows() {
   let dataChanged = false;
 
   // ==========================================
-  // 1. 清理待办幽灵数据（只要结单了，待办里就不该有）
+  // 1. 清理待办幽灵数据
   // ==========================================
   const todos = getTodos();
   const completed = getCompleted();
@@ -26544,35 +26544,33 @@ function autoFixHistoricalFlows() {
   if (dataChanged) {
     setTodos(newTodos);
     if (typeof renderTodoList === 'function') renderTodoList();
-    console.log('✅ [引擎] 已清理复活的幽灵待办订单');
   }
 
   // ==========================================
-  // 2. 修复结单流水（保证统计里显示的是总实收，而不是待结预付款）
+  // 2. 全局清洗流水备注（彻底干掉“系统修复”四个字）
   // ==========================================
   let flows = getFlows();
   let flowsChanged = false;
 
+  flows.forEach(f => {
+    if (f.note && f.note.indexOf('系统修复') > -1) {
+      f.note = f.note.replace('系统修复', '预付款+尾款');
+      flowsChanged = true;
+    }
+  });
+
+  // ==========================================
+  // 3. 修复结单流水数据完整性（金额和条数）
+  // ==========================================
   completed.forEach(c => {
     const totalReceived = Number(c.totalReceived) || 0;
     if (totalReceived <= 0) return;
 
     const finalFlows = flows.filter(f => f.completedId === c.id && f.type === 'final');
     
-    // ★ 新增：如果流水是以前生成的，带“系统修复”字样，洗掉它
-    finalFlows.forEach(f => {
-      if (f.note && f.note.indexOf('系统修复') > -1) {
-        f.note = f.note.replace('系统修复', '预付款+尾款');
-        flowsChanged = true;
-      }
-    });
-
-    // 如果流水条数不对，或者金额不对，说明数据错乱，必须修复
     if (finalFlows.length !== 1 || Math.abs(Number(finalFlows[0].amount) - totalReceived) > 0.01) {
-      // 删掉所有相关的错误流水（预付款、尾款、排单费等）
       flows = flows.filter(f => f.completedId !== c.id && (c.todoId ? f.todoId !== c.todoId : true));
       
-      // 重新生成一条完美的总实收
       flows.push({
         id: makeFlowId(),
         type: 'final',
@@ -26590,11 +26588,10 @@ function autoFixHistoricalFlows() {
   });
 
   // ==========================================
-  // 3. 修复撤单、废稿的流水
+  // 4. 修复撤单、废稿的流水（补全缺失）
   // ==========================================
   cancelled.forEach(c => {
-    const hasCorrectFlow = flows.some(f => f.cancelledId === c.id);
-    if (!hasCorrectFlow) {
+    if (!flows.some(f => f.cancelledId === c.id)) {
       if (Number(c.feeAmount) > 0) {
         flows.push({ id: makeFlowId(), type: 'cancel', amount: Number(c.feeAmount), note: '跑单费（修复）', date: c.cancelledDate || fmtDateStr(new Date()), todoId: c.todoId || '', completedId: '', cancelledId: c.id, discardedId: '', createdAt: Date.now() });
         flowsChanged = true;
@@ -26607,8 +26604,7 @@ function autoFixHistoricalFlows() {
   });
 
   discarded.forEach(c => {
-    const hasCorrectFlow = flows.some(f => f.discardedId === c.id);
-    if (!hasCorrectFlow) {
+    if (!flows.some(f => f.discardedId === c.id)) {
       if (Number(c.feeAmount) > 0) {
         flows.push({ id: makeFlowId(), type: 'discard', amount: Number(c.feeAmount), note: '废稿费（修复）', date: c.discardedDate || fmtDateStr(new Date()), todoId: c.todoId || '', completedId: '', cancelledId: '', discardedId: c.id, createdAt: Date.now() });
         flowsChanged = true;
@@ -26624,13 +26620,10 @@ function autoFixHistoricalFlows() {
     setFlows(flows);
     if (typeof renderStatsPage === 'function') renderStatsPage();
     if (typeof renderMasterList === 'function') renderMasterList();
-    console.log('✅ [引擎] 已修复统计流水与单主累计消费');
     dataChanged = true;
   }
 
-  // ==========================================
-  // 4. 如果发生了修复，立刻同步到云端！
-  // ==========================================
+  // 同步云端
   if (dataChanged && typeof currentUser !== 'undefined' && currentUser) {
     window.__hasUnsavedChanges = true;
     if (typeof setPendingFlag === 'function') setPendingFlag(true);
