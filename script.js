@@ -12721,7 +12721,7 @@ function renderMasterList() {
     let contactFull = m.contact ? formatContactFull(m.contactType, m.contact) : '—';
     // ★ 如果开启了隐私模式，隐藏联系方式
     if (__masterPrivacyMode && m.contact) {
-      contactFull = '*** (已隐藏)';
+      contactFull = '***';
     }
     const isSelected = !!__masterSelectedKeys[m.key];
 
@@ -26558,6 +26558,15 @@ function autoFixHistoricalFlows() {
     if (totalReceived <= 0) return;
 
     const finalFlows = flows.filter(f => f.completedId === c.id && f.type === 'final');
+    
+    // ★ 新增：如果流水是以前生成的，带“系统修复”字样，洗掉它
+    finalFlows.forEach(f => {
+      if (f.note && f.note.indexOf('系统修复') > -1) {
+        f.note = f.note.replace('系统修复', '预付款+尾款');
+        flowsChanged = true;
+      }
+    });
+
     // 如果流水条数不对，或者金额不对，说明数据错乱，必须修复
     if (finalFlows.length !== 1 || Math.abs(Number(finalFlows[0].amount) - totalReceived) > 0.01) {
       // 删掉所有相关的错误流水（预付款、尾款、排单费等）
