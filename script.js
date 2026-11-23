@@ -14084,7 +14084,7 @@ function applyTicketFilter() {
     }
   }
   __ticketFilter.clientId = $('ticketClientFilter') ? String($('ticketClientFilter').value || '').trim() : '';
-  /* ip 和 attribute 已在 toggle 时写入 __ticketFilter，无需再读 */
+  // 注意：ip, attribute, license, character 已经在点击标签时同步写入 __ticketFilter 了
   closeTicketFilterModal();
   renderTicketFolder();
 }
@@ -14240,7 +14240,19 @@ function backFromTicketFolder() {
 function collectTicketItems() {
   const items = [];
 
-  /* 已结单的小票 */
+  function extractLicenses(snap) {
+    let arr = [];
+    if (snap && snap.groups) {
+      snap.groups.forEach(g => {
+        (g.items || []).forEach(it => {
+          if (it.license && arr.indexOf(it.license) === -1) arr.push(it.license);
+        });
+      });
+    }
+    return arr;
+  }
+
+  // 已结单的小票
   getCompleted().forEach(c => {
     if (!c.receiptImage) return;
     const snap = c.receiptSnapshot || {};
@@ -14254,22 +14266,12 @@ function collectTicketItems() {
       tags: c.tags || [],
       ip: String(snap.ip || '').trim(),
       attribute: String(snap.attribute || '').trim(),
-      character: String(snap.character || '').trim(), // ★ 新增
-      licenses: (function() { // ★ 新增：提取里面所有的权限ID
-        let arr = [];
-        if (snap.groups) {
-          snap.groups.forEach(g => {
-            (g.items || []).forEach(it => {
-              if (it.license && arr.indexOf(it.license) === -1) arr.push(it.license);
-            });
-          });
-        }
-        return arr;
-      })()
+      character: String(snap.character || '').trim(),
+      licenses: extractLicenses(snap) // ★ 新增
     });
   });
 
-  /* 待结订单的小票 */
+  // 待结订单的小票
   getTodos().forEach(t => {
     if (!t.receiptImage) return;
     if (t.status !== 'pending') return;
@@ -14284,6 +14286,8 @@ function collectTicketItems() {
       tags: t.tags || [],
       ip: String(snap.ip || '').trim(),
       attribute: String(snap.attribute || '').trim(),
+      character: String(snap.character || '').trim(),
+      licenses: extractLicenses(snap) // ★ 新增
     });
   });
 
@@ -19422,7 +19426,6 @@ function closeOrderFilterModal() {
 function applyOrderFilter() {
   const state = __orderFilter;
 
-  /* 自定义范围：校验 */
   if (state.range === 'custom') {
     state.customStart = $('ofmStartDate') ? $('ofmStartDate').value : '';
     state.customEnd   = $('ofmEndDate')   ? $('ofmEndDate').value   : '';
@@ -19439,7 +19442,7 @@ function applyOrderFilter() {
   const range = getOrderFilterRange(state);
   const results = [];
 
-  /* --- 匹配函数 --- */
+  // 匹配函数定义
   const tagMatch = (itemTags) => {
     if (!state.tags.length) return true;
     if (!itemTags || !itemTags.length) return false;
@@ -19457,14 +19460,10 @@ function applyOrderFilter() {
     if (!snap) return false;
     return String(snap.attribute || '').trim() === state.attribute;
   };
-  const statusMatch = (s) => {
-    if (!state.statuses.length) return true;
-    return state.statuses.indexOf(s) > -1;
-  };
-  
+  // ★ 补齐缺失的权限和角色匹配函数
   const licenseMatch = (item) => {
     if (!state.license) return true;
-    const snap = item.receiptSnapshot;
+    const snap = item && item.receiptSnapshot;
     if (!snap || !snap.groups) return false;
     let found = false;
     snap.groups.forEach(g => {
@@ -19474,12 +19473,15 @@ function applyOrderFilter() {
     });
     return found;
   };
-  
   const charMatch = (item) => {
     if (!state.character) return true;
-    const snap = item.receiptSnapshot;
+    const snap = item && item.receiptSnapshot;
     if (!snap) return false;
     return String(snap.character || '').trim() === state.character;
+  };
+  const statusMatch = (s) => {
+    if (!state.statuses.length) return true;
+    return state.statuses.indexOf(s) > -1;
   };
   const rangeMatch = (dateStr) => {
     if (!range.start && !range.end) return true;
@@ -19489,7 +19491,7 @@ function applyOrderFilter() {
     return true;
   };
 
-  /* --- 待办 --- */
+  // 1. 待办
   getTodos().forEach(t => {
     let s = 'todo-active';
     if (t.isPlaceholder) s = 'todo-placeholder';
@@ -19506,43 +19508,42 @@ function applyOrderFilter() {
     results.push({ type: 'todo', status: s, data: t, orderDate: t.orderDate || '' });
   });
 
-  /* --- 已结单 --- */
+  // 2. 已结单
   getCompleted().forEach(c => {
     if (!rangeMatch(c.orderDate)) return;
     if (!statusMatch('completed')) return;
     if (!tagMatch(c.tags)) return;
     if (!ipMatch(c)) return;
     if (!attrMatch(c)) return;
-    if (!licenseMatch(t)) return;
-    if (!charMatch(t)) return;
+    if (!licenseMatch(c)) return;
+    if (!charMatch(c)) return;
     results.push({ type: 'completed', status: 'completed', data: c, orderDate: c.orderDate || '' });
   });
 
-  /* --- 已撤单 --- */
+  // 3. 已撤单
   getCancelled().forEach(c => {
     if (!rangeMatch(c.orderDate)) return;
     if (!statusMatch('cancelled')) return;
     if (!tagMatch(c.tags)) return;
     if (!ipMatch(c)) return;
     if (!attrMatch(c)) return;
-    if (!licenseMatch(t)) return;
-    if (!charMatch(t)) return;
+    if (!licenseMatch(c)) return;
+    if (!charMatch(c)) return;
     results.push({ type: 'cancelled', status: 'cancelled', data: c, orderDate: c.orderDate || '' });
   });
 
-  /* --- 已废稿 --- */
+  // 4. 已废稿
   getDiscarded().forEach(c => {
     if (!rangeMatch(c.orderDate)) return;
     if (!statusMatch('discarded')) return;
     if (!tagMatch(c.tags)) return;
     if (!ipMatch(c)) return;
     if (!attrMatch(c)) return;
-    if (!licenseMatch(t)) return;
-    if (!charMatch(t)) return;
+    if (!licenseMatch(c)) return;
+    if (!charMatch(c)) return;
     results.push({ type: 'discarded', status: 'discarded', data: c, orderDate: c.orderDate || '' });
   });
 
-  /* 按接单日期倒序 */
   results.sort((a, b) => {
     const da = a.orderDate || '';
     const db = b.orderDate || '';
