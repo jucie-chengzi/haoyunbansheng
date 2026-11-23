@@ -14313,12 +14313,15 @@ function renderTicketFolder() {
     });
   }
 
-  /* 筛选 */
+  /* ★ 核心修复：把权限和角色加进判断条件，不然选了他们也不会触发过滤 */
   const hasFilter = __ticketFilter.range !== 'all'
                  || __ticketFilter.clientId
                  || __ticketFilter.tagName
                  || __ticketFilter.ip
-                 || __ticketFilter.attribute;
+                 || __ticketFilter.attribute
+                 || __ticketFilter.license
+                 || __ticketFilter.character;
+                 
   let items = all;
   if (hasFilter) {
     items = items.filter(ticketMatchesFilter);
