@@ -1538,7 +1538,10 @@
         <button class="action-btn" onclick="openExtraPresetSetting()">附加费用</button>
         <p class="setting-desc">用于「稿件组」与「订单级」附加费用。</p>
         <button class="action-btn" onclick="openDiscountPresetSetting()">优惠折扣</button>
-        <p class="setting-desc" style="margin-bottom:0;">用于「稿件组」与「订单级」优惠。</p>
+        <p class="setting-desc">用于「稿件组」与「订单级」优惠。</p>
+        
+        <button class="action-btn" onclick="openGiftPresetSetting()">赠品预设</button>
+        <p class="setting-desc" style="margin-bottom:0;">用于小票页面的赠品快速选择。</p>
       </section>
     </section>
 
@@ -1581,7 +1584,19 @@
         <div id="discountPresetCards"></div>
       </section>
     </section>
-
+    <section class="page" id="pageGiftPreset">
+      <div class="page-head">
+        <h1>赠品预设</h1>
+        <button class="action-btn ghost" onclick="showPage('pageSettings')" style="padding:8px 16px;">← 返回</button>
+      </div>
+      <section class="panel">
+        <div style="display:flex; gap:10px; margin-bottom:16px;">
+          <button class="action-btn" onclick="openGiftPresetAddModal()">+ 添加赠品预设</button>
+        </div>
+        <div id="giftPresetCards"></div>
+      </section>
+    </section>
+    
        <section class="page" id="pageBasicSetting">
       <div class="page-head">
         <h1>基础信息</h1>

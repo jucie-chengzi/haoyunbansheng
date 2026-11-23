@@ -817,6 +817,7 @@ function addFlow(type, amount, note, date, opt) {
     completedId: opt.completedId || '',
     cancelledId: opt.cancelledId || '',
     discardedId: opt.discardedId || '',
+    clientId: opt.clientId || '', // ★ 新增：关联单主ID
     createdAt: Date.now(),
   };
   flows.push(flow);
@@ -7261,16 +7262,7 @@ function restoreReceiptFormSnapshot(snap) {
 
   const gc = $('giftsContainer');
   if (gc) gc.innerHTML = '';
-  (snap.gifts || []).forEach(g => {
-    addGift();
-    const rows = gc.querySelectorAll('.kv-row');
-    const last = rows[rows.length - 1];
-    if (!last) return;
-    const gnEl = last.querySelector('.gift-name');
-    const gvEl = last.querySelector('.gift-val');
-    if (gnEl) gnEl.value = g.name || '';
-    if (gvEl) gvEl.value = g.value || '';
-  });
+  (snap.gifts || []).forEach(g => addGift(g));
 
   // 预览图
   const ref = snap.previewImage || '';
@@ -10665,6 +10657,7 @@ function openCompletedDetail(id) {
   if (!c) return;
 
   const contactFull = formatContactFull(c.contactType, c.contact);
+  const snap = c.receiptSnapshot || {};
 
   $('modalRoot').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -10688,6 +10681,21 @@ function openCompletedDetail(id) {
               <span class="k">完成日期</span>
               <span class="v">${escapeHtml(c.completedDate || '—')}</span>
             </div>
+
+            <!-- ★ 新增：可补充的企划信息 -->
+            <div class="completed-detail-row">
+              <span class="k">IP</span>
+              <span class="v"><input id="compDetailIP" class="td-field" style="text-align:right; width:60%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.ip || '')}" placeholder="点击补充IP" /></span>
+            </div>
+            <div class="completed-detail-row">
+              <span class="k">属性</span>
+              <span class="v"><input id="compDetailAttr" class="td-field" style="text-align:right; width:60%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.attribute || '')}" placeholder="点击补充属性" /></span>
+            </div>
+            <div class="completed-detail-row">
+              <span class="k">角色</span>
+              <span class="v"><input id="compDetailChar" class="td-field" style="text-align:right; width:60%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.character || '')}" placeholder="点击补充角色" /></span>
+            </div>
+
             <div class="completed-detail-row">
               <span class="k">预付款</span>
               <span class="v">${fmt(c.prepaid || 0)}</span>
@@ -10717,8 +10725,9 @@ function openCompletedDetail(id) {
                         border:1px solid var(--line-soft); cursor:zoom-in;" />
           </div>
 
-          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+          <div class="actions" style="justify-content:flex-end;margin-top:18px; gap:10px;">
             <button class="action-btn" onclick="closeModal()">关闭</button>
+            <button class="action-btn" onclick="saveCompletedDetailExtra('${escapeAttr(c.id)}')">保存补充信息</button>
           </div>
         </div>
       </div>
@@ -10736,7 +10745,39 @@ function openCompletedDetail(id) {
     }).catch(() => {});
   }
 }
+// ★ 新增：保存结单详情里补充的 IP/属性/角色
+function saveCompletedDetailExtra(id) {
+  const list = getCompleted();
+  const idx = list.findIndex(x => x.id === id);
+  if (idx < 0) return;
 
+  const c = list[idx];
+  
+  // 如果没有快照，初始化一个空对象
+  if (!c.receiptSnapshot || typeof c.receiptSnapshot !== 'object') {
+    c.receiptSnapshot = {};
+  }
+
+  const newIp = $('compDetailIP') ? $('compDetailIP').value.trim() : '';
+  const newAttr = $('compDetailAttr') ? $('compDetailAttr').value.trim() : '';
+  const newChar = $('compDetailChar') ? $('compDetailChar').value.trim() : '';
+
+  c.receiptSnapshot.ip = newIp;
+  c.receiptSnapshot.attribute = newAttr;
+  c.receiptSnapshot.character = newChar;
+
+  if (setCompleted(list)) {
+    showToast('✅ 补充信息已保存', 2000);
+    closeModal();
+    
+    // 触发云端同步
+    window.__hasUnsavedChanges = true;
+    if (typeof setPendingFlag === 'function') setPendingFlag(true);
+    if (typeof commitSyncNow === 'function') commitSyncNow();
+  } else {
+    showToast('❌ 保存失败，可能是存储空间已满', 3000);
+  }
+}
 function openCancelledDetail(id) {
   const c = getCancelledById(id);
   if (!c) return;
@@ -11680,6 +11721,12 @@ function openRecordModal() {
           <label>备注 <span class="required-mark">*</span></label>
           <input id="recordNote" placeholder="如：XX 尾款 / 材料费 / 客户退款" maxlength="80" />
 
+          <label>关联单主（可选）</label>
+          <select id="recordClientId">
+            <option value="">不关联单主（仅作为普通收支）</option>
+            ${getMasterList().filter(m => m.key !== MASTER_UNKNOWN_KEY).map(m => `<option value="${escapeAttr(m.clientId)}">${escapeHtml(m.clientName || m.clientId)}</option>`).join('')}
+          </select>
+
           <label>日期</label>
           <input id="recordDate" type="date" value="${today}" />
 
@@ -11734,7 +11781,8 @@ function confirmRecord() {
     return;
   }
 
-  const flow = addFlow(type, amount, note, date, {});
+  const clientId = $('recordClientId') ? $('recordClientId').value : '';
+  const flow = addFlow(type, amount, note, date, { clientId });
   if (!flow) {
     showSimpleAlert('提示', '保存失败，请重试。');
     return;
@@ -12570,7 +12618,7 @@ function buildMasterList() {
     }
   });
 
-  flows.forEach(f => {
+    flows.forEach(f => {
     let cid = '';
     if (f.todoId) {
       cid = todoClientById[f.todoId] || recordClientByTodoId[f.todoId] || '';
@@ -12578,15 +12626,21 @@ function buildMasterList() {
     if (!cid && f.completedId) {
       cid = recordClientById[f.completedId] || '';
     }
+    // ★ 新增：优先使用直接绑定的单主 ID（针对记账里的打赏、退款等）
+    if (!cid && f.clientId) {
+      cid = f.clientId;
+    }
 
     const key = String(cid || '').trim() || MASTER_UNKNOWN_KEY;
     if (!map[key]) return;
 
-    const m   = map[key];
+    const m = map[key];
     const amt = Number(f.amount) || 0;
-    if (f.type === 'refund') {
+    
+    // 退款和支出，减少累计消费；收入（打赏），增加累计消费
+    if (f.type === 'refund' || f.type === 'expense') {
       m.totalIncome -= amt;
-    } else if (f.type !== 'expense') {
+    } else {
       m.totalIncome += amt;
     }
   });
@@ -17584,21 +17638,80 @@ function pickDiscountPresetForRow(btn) {
    [OE-03] 赠品
    ═══════════════════════════════════════════════════════ */
 
-function addGift() {
+function addGift(preset) {
   const c = $('giftsContainer');
   if (!c) return;
+  const p = preset || { name: '', value: '' };
   const d = document.createElement('div');
   d.className = 'kv-row';
   d.innerHTML = `
-    <div><input placeholder="名称" class="gift-name" /></div>
     <div>
+      <label style="margin-top:0;">赠品名称（可输入或从预设选择）</label>
+      <div class="item-name-wrap">
+        <input placeholder="输入或选择预设" class="gift-name" value="${escapeHtml(p.name || '')}" autocomplete="off" spellcheck="false" />
+        <button type="button" class="item-name-arrow" onclick="pickGiftPresetForRow(this)" title="选择赠品预设" aria-label="选择赠品预设">
+          <svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M2 4 L6 8 L10 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+    <div>
+      <label style="margin-top:0;">价值</label>
       <div class="input-unit-wrap prefix">
-        <input placeholder="价值" type="number" step="0.01" class="gift-val" />
+        <input placeholder="价值" type="number" step="0.01" class="gift-val" value="${p.value !== undefined && p.value !== null && p.value !== '' ? num2(p.value) : ''}" />
         <span class="input-unit">¥</span>
       </div>
     </div>
-    <div><button class="icon-btn" onclick="this.closest('.kv-row').remove()" title="删除">×</button></div>`;
+    <div style="align-self:flex-end; padding-bottom:6px;">
+      <button class="icon-btn" onclick="this.closest('.kv-row').remove()" title="删除">×</button>
+    </div>`;
   c.appendChild(d);
+}
+
+// ★ 新增：选择赠品预设弹窗
+function pickGiftPresetForRow(btn) {
+  const row = btn.closest('.kv-row');
+  const presets = getGiftPresets();
+
+  if (!presets.length) {
+    showSimpleAlert('提示', '暂无赠品预设，请先到「设置 → 赠品预设」中添加。');
+    return;
+  }
+
+  const rowsHtml = presets.map((p, i) => `
+    <tr>
+      <td>${escapeHtml(p.name)}</td>
+      <td>${fmt(p.value)}</td>
+      <td class="pick"><button class="pick-btn" onclick="selectGiftPreset(${i}, this)">选用</button></td>
+    </tr>`
+  ).join('');
+
+  const modalHtml = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head"><h3>选择赠品预设</h3><button class="icon-btn" onclick="closeModal()">×</button></div>
+        <div class="modal-body">
+          <table class="preset-table">
+            <thead><tr><th>名称</th><th>价值</th><th></th></tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>`;
+  
+  $('modalRoot').innerHTML = modalHtml;
+  window.__currentGiftRow = row; // 暂存当前行
+}
+
+function selectGiftPreset(idx, btn) {
+  const preset = getGiftPresets()[idx];
+  const row = window.__currentGiftRow;
+  if (!preset || !row) return;
+
+  row.querySelector('.gift-name').value = preset.name;
+  row.querySelector('.gift-val').value = num2(preset.value);
+  
+  closeModal();
+  window.__currentGiftRow = null;
 }
 
 
@@ -26717,3 +26830,125 @@ function autoFixHistoricalFlows() {
     }
   }
 })();
+/* ══════════ 赠品预设逻辑 ══════════ */
+const GIFT_PRESET_KEY = 'listReceiptGiftPresets';
+
+function getGiftPresets() {
+  const stored = safeLSGet(GIFT_PRESET_KEY, null, Array.isArray);
+  return stored || [];
+}
+
+function setGiftPresets(arr) {
+  safeLSSet(GIFT_PRESET_KEY, arr || []);
+}
+
+function openGiftPresetSetting() {
+  showPage('pageGiftPreset');
+  renderGiftPresetCards();
+}
+
+function renderGiftPresetCards() {
+  const presets = getGiftPresets();
+  const box = $('giftPresetCards');
+  if (!box) return;
+  if (!presets.length) {
+    box.innerHTML = '<p style="color:var(--ink-soft);">暂无预设，点击「+ 添加赠品预设」创建。</p>';
+    return;
+  }
+  box.innerHTML = presets.map((p, i) => {
+    return `
+    <div style="border:1px solid var(--line-soft);padding:14px;margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div><strong style="font-size:15px;">${escapeHtml(p.name)}</strong>
+          <span style="color:var(--ink-soft);font-size:12px;margin-left:8px;">[价值 ${fmt(p.value)}]</span></div>
+        <div style="display:flex;gap:8px;">
+          <button class="action-btn ghost" style="padding:6px 14px;font-size:12px;" onclick="editGiftPreset(${i})">编辑</button>
+          <button class="action-btn ghost" style="padding:6px 14px;font-size:12px;border-color:var(--red);color:var(--red);" onclick="deleteGiftPreset(${i})">删除</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+let editingGiftPresetIndex = -1;
+
+function editGiftPreset(i) {
+  editingGiftPresetIndex = i;
+  openGiftPresetAddModal(getGiftPresets()[i]);
+}
+
+function openGiftPresetAddModal(data) {
+  data = data || { name: '', value: '' };
+  editingGiftPresetIndex = (arguments.length === 0) ? -1 : editingGiftPresetIndex;
+  window.__editingGiftPreset = data;
+
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>${data.name ? '编辑赠品预设' : '添加赠品预设'}</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:8px;">
+            <div><label>赠品名称</label><input id="gp_name" value="${escapeHtml(data.name || '')}" placeholder="如：Q版小人 / 色纸" /></div>
+            <div>
+              <label>价值 (¥)</label>
+              <div class="input-unit-wrap prefix">
+                <input id="gp_value" type="number" step="0.01" value="${data.value !== undefined && data.value !== null && data.value !== '' ? num2(data.value) : ''}" />
+                <span class="input-unit">¥</span>
+              </div>
+            </div>
+          </div>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" onclick="saveGiftPreset()">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function saveGiftPreset() {
+  const name = $('gp_name').value.trim();
+  const value = Number($('gp_value').value) || 0;
+  if (!name) { $('gp_name').focus(); return; }
+
+  const obj = { name, value };
+  const presets = getGiftPresets();
+  if (editingGiftPresetIndex >= 0 && presets[editingGiftPresetIndex]) {
+    presets[editingGiftPresetIndex] = obj;
+  } else {
+    presets.push(obj);
+  }
+  setGiftPresets(presets);
+  editingGiftPresetIndex = -1;
+  closeModal();
+  renderGiftPresetCards();
+}
+
+function deleteGiftPreset(i) {
+  const presets = getGiftPresets();
+  const name = presets[i] ? presets[i].name : '';
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head"><h3>删除预设</h3><button class="icon-btn" onclick="closeModal()">×</button></div>
+        <div class="modal-body">
+          <p>确定删除「${escapeHtml(name)}」吗？此操作不可恢复。</p>
+          <div class="actions" style="justify-content:flex-end;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" style="background:var(--red);border-color:var(--red);" onclick="confirmDeleteGiftPreset(${i})">删除</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function confirmDeleteGiftPreset(i) {
+  const presets = getGiftPresets();
+  presets.splice(i, 1);
+  setGiftPresets(presets);
+  closeModal();
+  renderGiftPresetCards();
+}
