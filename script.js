@@ -10648,6 +10648,10 @@ function openCompletedDetail(id) {
 
   const contactFull = formatContactFull(c.contactType, c.contact);
   const snap = c.receiptSnapshot || {};
+  
+  // ★ 提取默认权限（取第一个稿件的权限作为展示）
+  const defaultLicense = snap.groups && snap.groups[0] && snap.groups[0].items && snap.groups[0].items[0] ? snap.groups[0].items[0].license : (snap.license || '');
+  const perms = getPermissions();
 
   $('modalRoot').innerHTML = `
     <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
@@ -10672,18 +10676,28 @@ function openCompletedDetail(id) {
               <span class="v">${escapeHtml(c.completedDate || '—')}</span>
             </div>
 
-            <!-- ★ 新增：可补充的企划信息 -->
+            <!-- ★ 新增：可修改的权限 -->
+            <div class="completed-detail-row">
+              <span class="k">权限</span>
+              <span class="v">
+                <select id="compDetailLicense" class="td-field" style="text-align:right; width:65%; border-bottom:1px dashed var(--line); padding:4px;">
+                  <option value="">不设置 / 默认</option>
+                  ${perms.map(p => `<option value="${p.id}" ${defaultLicense === p.id ? 'selected' : ''}>${escapeHtml(p.name)}</option>`).join('')}
+                </select>
+              </span>
+            </div>
+
             <div class="completed-detail-row">
               <span class="k">IP</span>
-              <span class="v"><input id="compDetailIP" class="td-field" style="text-align:right; width:60%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.ip || '')}" placeholder="点击补充IP" /></span>
+              <span class="v"><input id="compDetailIP" class="td-field" style="text-align:right; width:65%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.ip || '')}" placeholder="点击补充IP" /></span>
             </div>
             <div class="completed-detail-row">
               <span class="k">属性</span>
-              <span class="v"><input id="compDetailAttr" class="td-field" style="text-align:right; width:60%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.attribute || '')}" placeholder="点击补充属性" /></span>
+              <span class="v"><input id="compDetailAttr" class="td-field" style="text-align:right; width:65%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.attribute || '')}" placeholder="点击补充属性" /></span>
             </div>
             <div class="completed-detail-row">
               <span class="k">角色</span>
-              <span class="v"><input id="compDetailChar" class="td-field" style="text-align:right; width:60%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.character || '')}" placeholder="点击补充角色" /></span>
+              <span class="v"><input id="compDetailChar" class="td-field" style="text-align:right; width:65%; border-bottom:1px dashed var(--line)" value="${escapeHtml(snap.character || '')}" placeholder="点击补充角色" /></span>
             </div>
 
             <div class="completed-detail-row">
@@ -10736,6 +10750,7 @@ function openCompletedDetail(id) {
   }
 }
 // ★ 新增：保存结单详情里补充的 IP/属性/角色
+// ★ 新增：保存结单详情里补充的 权限/IP/属性/角色
 function saveCompletedDetailExtra(id) {
   const list = getCompleted();
   const idx = list.findIndex(x => x.id === id);
@@ -10748,6 +10763,7 @@ function saveCompletedDetailExtra(id) {
     c.receiptSnapshot = {};
   }
 
+  const newLicense = $('compDetailLicense') ? $('compDetailLicense').value : '';
   const newIp = $('compDetailIP') ? $('compDetailIP').value.trim() : '';
   const newAttr = $('compDetailAttr') ? $('compDetailAttr').value.trim() : '';
   const newChar = $('compDetailChar') ? $('compDetailChar').value.trim() : '';
@@ -10755,6 +10771,20 @@ function saveCompletedDetailExtra(id) {
   c.receiptSnapshot.ip = newIp;
   c.receiptSnapshot.attribute = newAttr;
   c.receiptSnapshot.character = newChar;
+  
+  // ★ 核心：将权限更新到快照里的每一个稿件
+  if (c.receiptSnapshot.groups && Array.isArray(c.receiptSnapshot.groups)) {
+    c.receiptSnapshot.groups.forEach(g => {
+      if (g.items && Array.isArray(g.items)) {
+        g.items.forEach(it => {
+          it.license = newLicense;
+        });
+      }
+    });
+  } else {
+    // 兼容没有任何稿件组的异常数据
+    c.receiptSnapshot.license = newLicense;
+  }
 
   if (setCompleted(list)) {
     showToast('✅ 补充信息已保存', 2000);
@@ -13776,7 +13806,7 @@ var TICKET_FOLDER_PAGE_SIZE = 30;
    [TF-02] 票夹 · 筛选 + 管理 + 删除
    ═══════════════════════════════════════════════════════ */
 
-var __ticketFilter = { range: 'all', customStart: '', customEnd: '', tagName: '', clientId: '', ip: '', attribute: '' };
+var __ticketFilter = { range: 'all', customStart: '', customEnd: '', tagName: '', clientId: '', ip: '', attribute: '', license: '', character: '' };
 var __ticketManage = { active: false, selected: {} };
 
 /* 判断某张小票是否在筛选范围内 */
@@ -13824,6 +13854,16 @@ function ticketMatchesFilter(it) {
     if (String(it.attribute || '').trim() !== __ticketFilter.attribute) return false;
   }
 
+  /* ★ 权限 */
+  if (__ticketFilter.license) {
+    if (!it.licenses || it.licenses.indexOf(__ticketFilter.license) === -1) return false;
+  }
+
+  /* ★ 角色 */
+  if (__ticketFilter.character) {
+    if (String(it.character || '').trim() !== __ticketFilter.character) return false;
+  }
+
   return true;
 }
 
@@ -13837,6 +13877,31 @@ function openTicketFilterModal() {
     return '<button type="button" class="ofm-range-btn' + (cur.range === k ? ' active' : '') +
            '" onclick="setTicketFilterRange(\'' + k + '\')">' + label + '</button>';
   }).join('');
+
+  /* ★ 新增：权限列表 */
+  const perms = getPermissions();
+  const usedLicenses = collectHistoryLicenses();
+  const licenseListHtml = usedLicenses.length
+    ? usedLicenses.map(id => {
+        const p = perms.find(x => x.id === id);
+        if (!p) return '';
+        const sel = cur.license === id;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="setTicketFilterLicense(\'' + escapeAttr(id) + '\')">' +
+               escapeHtml(p.name) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史权限</span>';
+
+  /* ★ 新增：角色列表 */
+  const charList = collectHistoryFieldValues('character');
+  const charListHtml = charList.length
+    ? charList.map(v => {
+        const sel = cur.character === v;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleTicketFilterCharacter(\'' + escapeAttr(v) + '\')">' +
+               escapeHtml(v) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史角色</span>';
 
   const tagListHtml = lib.length
     ? lib.map(t => {
@@ -13891,6 +13956,12 @@ function openTicketFilterModal() {
             <input type="text" id="ticketClientFilter" value="${escapeAttr(cur.clientId || '')}" placeholder="输入单主 ID 关键字（可留空）" maxlength="60" />
           </div>
 
+          <!-- ★ 权限筛选 -->
+          <div class="ofm-section">
+            <label class="ofm-section-label">权限（单选）</label>
+            <div class="ofm-tag-list" id="ticketLicenseFilterList">${licenseListHtml}</div>
+          </div>
+
           <div class="ofm-section">
             <label class="ofm-section-label">标签（单选，可留空）</label>
             <div class="ofm-tag-list" id="ticketTagFilterList">${tagListHtml}</div>
@@ -13904,6 +13975,12 @@ function openTicketFilterModal() {
           <div class="ofm-section">
             <label class="ofm-section-label">属性（单选）</label>
             <div class="ofm-tag-list" id="ticketAttrFilterList">${attrListHtml}</div>
+          </div>
+
+          <!-- ★ 角色筛选 -->
+          <div class="ofm-section">
+            <label class="ofm-section-label">角色（单选）</label>
+            <div class="ofm-tag-list" id="ticketCharFilterList">${charListHtml}</div>
           </div>
 
           <div class="actions" style="justify-content:space-between;margin-top:22px;">
@@ -13956,6 +14033,37 @@ function toggleTicketFilterIP(name) {
   if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史 IP</span>';
 }
 
+// ★ 新增：权限切换
+function setTicketFilterLicense(id) {
+  __ticketFilter.license = (__ticketFilter.license === id) ? '' : id;
+  const perms = getPermissions();
+  const used = collectHistoryLicenses();
+  const html = used.map(i => {
+    const p = perms.find(x => x.id === i);
+    if (!p) return '';
+    const sel = __ticketFilter.license === i;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="setTicketFilterLicense(\'' + escapeAttr(i) + '\')">' +
+           escapeHtml(p.name) + '</span>';
+  }).join('');
+  const box = $('ticketLicenseFilterList');
+  if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史权限</span>';
+}
+
+// ★ 新增：角色切换
+function toggleTicketFilterCharacter(name) {
+  __ticketFilter.character = (__ticketFilter.character === name) ? '' : name;
+  const list = collectHistoryFieldValues('character');
+  const html = list.map(v => {
+    const sel = __ticketFilter.character === v;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleTicketFilterCharacter(\'' + escapeAttr(v) + '\')">' +
+           escapeHtml(v) + '</span>';
+  }).join('');
+  const box = $('ticketCharFilterList');
+  if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史角色</span>';
+}
+
 function toggleTicketFilterAttribute(name) {
   __ticketFilter.attribute = (__ticketFilter.attribute === name) ? '' : name;
   const list = collectHistoryFieldValues('attribute');
@@ -13970,7 +14078,7 @@ function toggleTicketFilterAttribute(name) {
 }
 
 function clearTicketFilter() {
-  __ticketFilter = { range: 'all', customStart: '', customEnd: '', tagName: '', clientId: '', ip: '', attribute: '' };
+  __ticketFilter = { range: 'all', customStart: '', customEnd: '', tagName: '', clientId: '', ip: '', attribute: '', license: '', character: '' };
   openTicketFilterModal();
 }
 
@@ -14159,6 +14267,18 @@ function collectTicketItems() {
       tags: c.tags || [],
       ip: String(snap.ip || '').trim(),
       attribute: String(snap.attribute || '').trim(),
+      character: String(snap.character || '').trim(), // ★ 新增
+      licenses: (function() { // ★ 新增：提取里面所有的权限ID
+        let arr = [];
+        if (snap.groups) {
+          snap.groups.forEach(g => {
+            (g.items || []).forEach(it => {
+              if (it.license && arr.indexOf(it.license) === -1) arr.push(it.license);
+            });
+          });
+        }
+        return arr;
+      })()
     });
   });
 
@@ -18989,6 +19109,8 @@ var __orderFilter = {
   statuses: [],
   ip: '',
   attribute: '',
+  license: '',  // ★ 新增
+  character: '' // ★ 新增
 };
 var __orderFilterResults = [];
 
@@ -19016,6 +19138,31 @@ function renderOrderFilterModal() {
     return '<button type="button" class="ofm-range-btn' + (state.range === k ? ' active' : '') +
            '" onclick="setOrderFilterRange(\'' + k + '\')">' + label + '</button>';
   }).join('');
+
+  /* 权限列表 */
+  const perms = getPermissions();
+  const usedLicenses = collectHistoryLicenses();
+  const licenseListHtml = usedLicenses.length
+    ? usedLicenses.map(id => {
+        const p = perms.find(x => x.id === id);
+        if (!p) return '';
+        const sel = state.license === id;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleOrderFilterLicense(\'' + escapeAttr(id) + '\')">' +
+               escapeHtml(p.name) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史权限</span>';
+
+  /* 角色列表 */
+  const charList = collectHistoryFieldValues('character');
+  const charListHtml = charList.length
+    ? charList.map(v => {
+        const sel = state.character === v;
+        return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+               '" onclick="toggleOrderFilterCharacter(\'' + escapeAttr(v) + '\')">' +
+               escapeHtml(v) + '</span>';
+      }).join('')
+    : '<span class="ofm-empty">还没有历史角色</span>';
 
   /* 标签列表 */
   const tagListHtml = lib.length
@@ -19075,6 +19222,12 @@ function renderOrderFilterModal() {
             </div>
           </div>
 
+          <!-- ★ 权限筛选 -->
+          <div class="ofm-section">
+            <label class="ofm-section-label">权限（单选）</label>
+            <div class="ofm-tag-list">${licenseListHtml}</div>
+          </div>
+
           <div class="ofm-section">
             <label class="ofm-section-label">标签（多选，任意匹配）</label>
             <div class="ofm-tag-list">${tagListHtml}</div>
@@ -19088,6 +19241,12 @@ function renderOrderFilterModal() {
           <div class="ofm-section">
             <label class="ofm-section-label">属性（单选）</label>
             <div class="ofm-tag-list">${attrListHtml}</div>
+          </div>
+
+          <!-- ★ 角色筛选 -->
+          <div class="ofm-section">
+            <label class="ofm-section-label">角色（单选）</label>
+            <div class="ofm-tag-list">${charListHtml}</div>
           </div>
 
           <div class="ofm-section">
@@ -19108,6 +19267,23 @@ function renderOrderFilterModal() {
 }
 
 /* 收集历史订单里某个字段的所有值（去重 + 按出现次数排序） */
+// ★ 新增：提取历史出现过的权限 ID
+function collectHistoryLicenses() {
+  const counter = {};
+  const sources = [].concat(getTodos(), getCompleted(), getCancelled(), getDiscarded());
+  sources.forEach(item => {
+    if (!item || !item.receiptSnapshot || !item.receiptSnapshot.groups) return;
+    item.receiptSnapshot.groups.forEach(g => {
+      (g.items || []).forEach(it => {
+        if (it.license) {
+          counter[it.license] = (counter[it.license] || 0) + 1;
+        }
+      });
+    });
+  });
+  return Object.keys(counter).sort((a, b) => counter[b] - counter[a]);
+}
+
 function collectHistoryFieldValues(field) {
   const counter = {};
   const sources = [].concat(
@@ -19126,6 +19302,49 @@ function collectHistoryFieldValues(field) {
     if (counter[b] !== counter[a]) return counter[b] - counter[a];
     return a.localeCompare(b, 'zh-Hans-CN');
   });
+}
+
+function toggleOrderFilterLicense(id) {
+  __orderFilter.license = (__orderFilter.license === id) ? '' : id;
+  const perms = getPermissions();
+  const used = collectHistoryLicenses();
+  const html = used.map(i => {
+    const p = perms.find(x => x.id === i);
+    if (!p) return '';
+    const sel = __orderFilter.license === i;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleOrderFilterLicense(\'' + escapeAttr(i) + '\')">' +
+           escapeHtml(p.name) + '</span>';
+  }).join('');
+  const secs = document.querySelectorAll('.ofm-section');
+  for (const sec of secs) {
+    const lbl = sec.querySelector('.ofm-section-label');
+    if (lbl && lbl.textContent.trim().indexOf('权限') === 0) {
+      const box = sec.querySelector('.ofm-tag-list');
+      if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史权限</span>';
+      break;
+    }
+  }
+}
+
+function toggleOrderFilterCharacter(name) {
+  __orderFilter.character = (__orderFilter.character === name) ? '' : name;
+  const list = collectHistoryFieldValues('character');
+  const html = list.map(v => {
+    const sel = __orderFilter.character === v;
+    return '<span class="tag-chip tag-chip-plain' + (sel ? ' is-selected' : '') +
+           '" onclick="toggleOrderFilterCharacter(\'' + escapeAttr(v) + '\')">' +
+           escapeHtml(v) + '</span>';
+  }).join('');
+  const secs = document.querySelectorAll('.ofm-section');
+  for (const sec of secs) {
+    const lbl = sec.querySelector('.ofm-section-label');
+    if (lbl && lbl.textContent.trim().indexOf('角色') === 0) {
+      const box = sec.querySelector('.ofm-tag-list');
+      if (box) box.innerHTML = html || '<span class="ofm-empty">还没有历史角色</span>';
+      break;
+    }
+  }
 }
 
 function toggleOrderFilterIP(name) {
@@ -19209,7 +19428,7 @@ function toggleOrderFilterStatus(k) {
 }
 
 function clearOrderFilter() {
-  __orderFilter = { range: 'all', customStart: '', customEnd: '', tags: [], statuses: [], ip: '', attribute: '' };
+  __orderFilter = { range: 'all', customStart: '', customEnd: '', tags: [], statuses: [], ip: '', attribute: '', license: '', character: '' };
   renderOrderFilterModal();
 }
 
@@ -19264,6 +19483,26 @@ function applyOrderFilter() {
     if (!state.statuses.length) return true;
     return state.statuses.indexOf(s) > -1;
   };
+  
+  const licenseMatch = (item) => {
+    if (!state.license) return true;
+    const snap = item.receiptSnapshot;
+    if (!snap || !snap.groups) return false;
+    let found = false;
+    snap.groups.forEach(g => {
+      (g.items || []).forEach(it => {
+        if (it.license === state.license) found = true;
+      });
+    });
+    return found;
+  };
+  
+  const charMatch = (item) => {
+    if (!state.character) return true;
+    const snap = item.receiptSnapshot;
+    if (!snap) return false;
+    return String(snap.character || '').trim() === state.character;
+  };
   const rangeMatch = (dateStr) => {
     if (!range.start && !range.end) return true;
     if (!dateStr) return false;
@@ -19283,6 +19522,8 @@ function applyOrderFilter() {
     if (!tagMatch(t.tags)) return;
     if (!ipMatch(t)) return;
     if (!attrMatch(t)) return;
+    if (!licenseMatch(t)) return;
+    if (!charMatch(t)) return;
 
     results.push({ type: 'todo', status: s, data: t, orderDate: t.orderDate || '' });
   });
@@ -19294,6 +19535,8 @@ function applyOrderFilter() {
     if (!tagMatch(c.tags)) return;
     if (!ipMatch(c)) return;
     if (!attrMatch(c)) return;
+    if (!licenseMatch(t)) return;
+    if (!charMatch(t)) return;
     results.push({ type: 'completed', status: 'completed', data: c, orderDate: c.orderDate || '' });
   });
 
@@ -19304,6 +19547,8 @@ function applyOrderFilter() {
     if (!tagMatch(c.tags)) return;
     if (!ipMatch(c)) return;
     if (!attrMatch(c)) return;
+    if (!licenseMatch(t)) return;
+    if (!charMatch(t)) return;
     results.push({ type: 'cancelled', status: 'cancelled', data: c, orderDate: c.orderDate || '' });
   });
 
@@ -19314,6 +19559,8 @@ function applyOrderFilter() {
     if (!tagMatch(c.tags)) return;
     if (!ipMatch(c)) return;
     if (!attrMatch(c)) return;
+    if (!licenseMatch(t)) return;
+    if (!charMatch(t)) return;
     results.push({ type: 'discarded', status: 'discarded', data: c, orderDate: c.orderDate || '' });
   });
 
