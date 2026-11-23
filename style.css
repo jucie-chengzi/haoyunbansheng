@@ -9359,3 +9359,12 @@ body.is-preset-dragging {
   color: var(--red);
   opacity: 0.8;
 }
+/* ══════════ 结单详情 · 权限下拉框防重合 ══════════ */
+#compDetailLicense {
+  text-align: right;
+  width: 65%;
+  border-bottom: 1px dashed var(--line);
+  /* 强制右侧留出 24px 的箭头空间，防止文字和箭头重叠 */
+  padding: 4px 24px 4px 4px !important; 
+  background-position: right 4px center !important;
+}
