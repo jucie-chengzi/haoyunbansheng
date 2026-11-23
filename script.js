@@ -336,16 +336,23 @@ function showPage(id) {
 
 /* ══════════ [U-10] 权限倍率 ══════════ */
 
-function getLicenseMultiplier(licenseId) {
+function getLicenseInfo(licenseId) {
   const perms = getPermissions();
   const p = perms.find(x => x.id === licenseId);
-  return p ? Number(p.rate) || 1 : 1;
+  if (!p) return { rate: 1, op: 'multiply', name: '' };
+  return { rate: Number(p.rate) || 1, op: p.op || 'multiply', name: p.name };
+}
+
+function getLicenseMultiplier(licenseId) {
+  return getLicenseInfo(licenseId).rate;
 }
 
 function licenseText(licenseId) {
-  const perms = getPermissions();
-  const p = perms.find(x => x.id === licenseId);
-  if (!p) return '—';
+  const p = getLicenseInfo(licenseId);
+  if (!p.name) return '—';
+  if (p.op === 'add') {
+    return p.name + ' ＋' + num2(p.rate);
+  }
   return p.name + ' ×' + num2(p.rate);
 }
 
@@ -5294,84 +5301,60 @@ function calcItem(block, licenseOverride) {
   const qty     = Number(block.querySelector('.item-qty').value) || 1;
   const licenseEnabled = isLicenseEnabled();
   const license = licenseEnabled ? (licenseOverride || block.querySelector('.item-license').value) : '';
-  const m = licenseEnabled ? getLicenseMultiplier(license) : 1;
+  
+  const licInfo = licenseEnabled ? getLicenseInfo(license) : { rate: 0, op: 'multiply' };
 
-  const addons = [];   /* 增项 */
-  const nodes  = [];   /* 节点 */
+  const addons = [];
+  const nodes  = [];
 
-  /* 第一步：收集增项和节点 */
   block.querySelectorAll('.sub-item').forEach(sub => {
     const sname = sub.querySelector('.sub-name').value.trim();
     if (!sname) return;
     const svalue = Number(sub.querySelector('.sub-value').value) || 0;
 
     if (sub.dataset.isNode === '1') {
-      nodes.push({
-        name: sname,
-        op: 'multiply',
-        value: svalue,
-        ratio: svalue,
-        isNode: true,
-      });
+      nodes.push({ name: sname, op: 'multiply', value: svalue, ratio: svalue, isNode: true });
     } else {
       const sopSel = sub.querySelector('.sub-op-select');
       const sop = sopSel ? sopSel.value : 'add';
-      addons.push({
-        name: sname,
-        op: sop,
-        value: svalue,
-        isNode: false,
-      });
+      addons.push({ name: sname, op: sop, value: svalue, isNode: false });
     }
   });
 
-  /* 第二步：算增项合计（单元） */
   let addonSum = 0;
   addons.forEach(a => {
-    let unit;
-    if (a.op === 'multiply') {
-      unit = price * a.value / 100;
-    } else {
-      unit = a.value;
-    }
-    a.unit     = unit;
-    a.subtotal = unit * qty * m;
-    addonSum  += unit;
+    let unit = (a.op === 'multiply') ? (price * a.value / 100) : a.value;
+    a.unit = unit;
+    // 加法权限下，增项不乘权限倍率，乘法权限下要乘
+    a.subtotal = (licInfo.op === 'add') ? (unit * qty) : (unit * qty * licInfo.rate);
+    addonSum += unit;
   });
 
-  /* 单元原价 = 基础价 + 增项合计 */
   const baseUnit = price + addonSum;
-
-  /* 单稿件原价（单元） */
   const itemOriginalUnit = baseUnit;
-
-  /* 单稿件小计 = 单稿件原价 × 数量（不含用途比例） */
   const itemOriginalTotal = itemOriginalUnit * qty;
 
-  /* 单稿件合计 = 单稿件小计 × 用途比例（权限倍率） */
-  const itemTotal = itemOriginalTotal * m;
+  // ★ 核心区分：乘法 vs 加法
+  let itemTotal = 0;
+  if (licenseEnabled && licInfo.op === 'add') {
+    // 加法：原价 + 固定金额，再乘数量
+    itemTotal = (itemOriginalUnit + licInfo.rate) * qty;
+  } else {
+    // 乘法：原价 × 倍率，再乘数量
+    itemTotal = itemOriginalTotal * (licenseEnabled ? licInfo.rate : 1);
+  }
 
-  /* 第三步：算节点（只用于展示拆分，不改变 itemTotal） */
   nodes.forEach(n => {
     const unit = baseUnit * n.value / 100;
-    n.unit     = unit;
-    n.subtotal = unit * qty * m;
+    n.unit = unit;
+    n.subtotal = (licInfo.op === 'add') ? (unit * qty) : (unit * qty * licInfo.rate);
   });
 
-  const hasNodes = nodes.length > 0;
-
   return {
-    name, price, qty, license, m,
-    addons,
-    nodes,
-    baseUnit,
-    addonSum,
-    itemOriginalUnit,
-    itemOriginalTotal,
-    itemTotal,
-    partsUnitSum: baseUnit,
-    itemSubtotal: itemTotal,
-    hasNodes,
+    name, price, qty, license, m: licInfo.rate,
+    addons, nodes, baseUnit, addonSum,
+    itemOriginalUnit, itemOriginalTotal, itemTotal,
+    partsUnitSum: baseUnit, itemSubtotal: itemTotal, hasNodes: nodes.length > 0,
   };
 }
 
@@ -7796,7 +7779,8 @@ function calcSnapshotAmounts(snap) {
     (g.items || []).forEach(it => {
       const price = Number(it.price) || 0;
       const qty   = Number(it.qty) || 1;
-      const m     = getLicenseMultiplier(it.license);
+      const licInfo = getLicenseInfo(it.license);
+      const m     = licInfo.rate;
 
       totalItemCount++;
 
@@ -7810,7 +7794,13 @@ function calcSnapshotAmounts(snap) {
 
       const baseUnit = price + addonSum;
       const itemOriginalTotal = baseUnit * qty;
-      const itemTotal = itemOriginalTotal * m;
+      
+      let itemTotal = 0;
+      if (licInfo.op === 'add') {
+        itemTotal = (baseUnit + m) * qty;
+      } else {
+        itemTotal = itemOriginalTotal * m;
+      }
 
       groupOriginal += itemOriginalTotal;
       groupSubtotal += itemTotal;
@@ -15124,11 +15114,96 @@ function renderPermissionList() {
   box.innerHTML = perms.map((p, i) => `
     <div class="perm-row">
       <input class="perm-name" value="${escapeAttr(p.name)}" oninput="updatePermissionName(${i}, this.value)" />
-      <span class="perm-x">×</span>
-      <input class="perm-rate" type="number" step="0.1" value="${num2(p.rate)}" oninput="updatePermissionRate(${i}, this.value)" />
+      <select class="perm-op" style="flex:0 0 60px; padding:2px;" onchange="updatePermissionOp(${i}, this.value)">
+        <option value="multiply" ${p.op !== 'add' ? 'selected' : ''}>×</option>
+        <option value="add" ${p.op === 'add' ? 'selected' : ''}>＋</option>
+      </select>
+      <input class="perm-rate" type="number" step="0.01" value="${num2(p.rate)}" oninput="updatePermissionRate(${i}, this.value)" />
       <button class="icon-btn" onclick="deletePermission(${i})" title="删除">×</button>
     </div>
   `).join('');
+}
+
+function updatePermissionName(i, name) {
+  const perms = getPermissions();
+  if (!perms[i]) return;
+  perms[i].name = name;
+  setPermissions(perms);
+  syncPermissionsToMain();
+  refreshAllItemLicenses();
+}
+
+function updatePermissionOp(i, op) {
+  const perms = getPermissions();
+  if (!perms[i]) return;
+  perms[i].op = op;
+  setPermissions(perms);
+  refreshAllItemLicenses();
+}
+
+function updatePermissionRate(i, rate) {
+  const perms = getPermissions();
+  if (!perms[i]) return;
+  perms[i].rate = Number(rate) || 0;
+  setPermissions(perms);
+  syncPermissionsToMain();
+  refreshAllItemLicenses();
+}
+
+function openAddPermissionModal() {
+  $('modalRoot').innerHTML = `
+    <div class="modal-overlay" onclick="if(event.target===this)closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <div class="modal-head">
+          <h3>添加权限</h3>
+          <button class="icon-btn" onclick="closeModal()">×</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:grid;grid-template-columns:2fr 1fr 1fr;gap:12px;align-items:flex-end;margin-top:8px;">
+            <div>
+              <label>权限名称</label>
+              <input id="permName" placeholder="如：商用 / 买断" />
+            </div>
+            <div>
+              <label>算法</label>
+              <select id="permOp">
+                <option value="multiply">×</option>
+                <option value="add">＋</option>
+              </select>
+            </div>
+            <div>
+              <label>数值</label>
+              <input id="permRate" type="number" step="0.01" placeholder="如：2 / 10" />
+            </div>
+          </div>
+          <p style="font-size:12px;color:var(--ink-soft);margin-top:12px;">
+            × ：原价 × 数值。<br>
+            ＋ ：原价 + 数值（固定金额）。
+          </p>
+          <div class="actions" style="justify-content:flex-end;margin-top:18px;">
+            <button class="action-btn ghost" onclick="closeModal()">取消</button>
+            <button class="action-btn" onclick="saveNewPermission()">保存</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  setTimeout(() => { const el = $('permName'); if (el) el.focus(); }, 50);
+}
+
+function saveNewPermission() {
+  const name = ($('permName').value || '').trim();
+  const op = $('permOp') ? $('permOp').value : 'multiply';
+  const rate = Number($('permRate').value);
+  if (!name) { $('permName').focus(); return; }
+  if (!isFinite(rate) || rate < 0) { $('permRate').focus(); return; }
+  
+  const perms = getPermissions();
+  perms.push({ id: 'p_' + Date.now() + '_' + Math.floor(Math.random() * 1000), name, op, rate });
+  setPermissions(perms);
+  closeModal();
+  renderPermissionList();
+  syncPermissionsToMain();
+  refreshAllItemLicenses();
 }
 
 function updatePermissionName(i, name) {
