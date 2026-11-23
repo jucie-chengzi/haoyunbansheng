@@ -10769,14 +10769,20 @@ function saveCompletedDetailExtra(id) {
   c.receiptSnapshot.attribute = newAttr;
   c.receiptSnapshot.character = newChar;
   
-  if (c.receiptSnapshot.groups && Array.isArray(c.receiptSnapshot.groups)) {
+  // ★ 核心防御：即使没有 groups，也要强行造一个出来，保证权限能被存下
+  if (!c.receiptSnapshot.groups || !Array.isArray(c.receiptSnapshot.groups) || c.receiptSnapshot.groups.length === 0) {
+    c.receiptSnapshot.groups = [{
+      items: [{ license: newLicense }]
+    }];
+  } else {
     c.receiptSnapshot.groups.forEach(g => {
-      if (g.items && Array.isArray(g.items)) {
-        g.items.forEach(it => { it.license = newLicense; });
+      if (!g.items || !Array.isArray(g.items)) {
+        g.items = [{ license: newLicense }];
+      } else {
+        if (g.items.length === 0) g.items.push({ license: newLicense });
+        else g.items.forEach(it => { it.license = newLicense; });
       }
     });
-  } else {
-    c.receiptSnapshot.license = newLicense;
   }
 
   if (setCompleted(list)) {
@@ -13847,7 +13853,8 @@ function ticketMatchesFilter(it) {
 
   /* ★ 权限 */
   if (__ticketFilter.license) {
-    if (!it.licenses || it.licenses.indexOf(__ticketFilter.license) === -1) return false;
+    const licArray = Array.isArray(it.licenses) ? it.licenses : [];
+    if (licArray.indexOf(__ticketFilter.license) === -1) return false;
   }
 
   /* ★ 角色 */
@@ -14313,7 +14320,7 @@ function renderTicketFolder() {
     });
   }
 
-  /* ★ 核心修复：把权限和角色加进判断条件，不然选了他们也不会触发过滤 */
+  /* ★ 核心修复：必须把 license 和 character 加进来，否则选了也会被跳过！ */
   const hasFilter = __ticketFilter.range !== 'all'
                  || __ticketFilter.clientId
                  || __ticketFilter.tagName
