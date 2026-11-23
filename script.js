@@ -25,7 +25,7 @@
 /* ══════════ [U-01] 全局常量 / 存储 key ══════════ */
 
 /* ---- 应用版本（用于更新公告） ---- */
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.2.1';
 const ANNOUNCEMENT_SEEN_KEY = 'listReceiptAnnouncementSeen';
 
 /* ---- 数据版本 + 迁移 ---- */
@@ -21015,6 +21015,17 @@ const ANNOUNCEMENTS = {
     `,
   },
   '1.2.0': {
+    title: '账号云同步上线',
+    html: `
+      <ul style="padding-left:20px;line-height:1.85;">
+        <li><strong>云同步功能上线</strong>：首页右上角新增“账号与同步”按钮（最后一个云朵图标）。</li>
+        <li><strong>跨设备无缝衔接</strong>：现在你可以注册并登录账号。开启云端同步后，同账号数据可跨设备/浏览器使用。</li>
+        <li><strong>结单小票更贴心</strong>：生成结单小票时，可自行选择是否保存图片，不再强制保存。</li>
+      </ul>
+      <p style="margin-top:12px;">已有数据会自动升级，无需手动处理。</p>
+    `,
+  },
+    '1.2.0': {
     title: '账号云同步上线',
     html: `
       <ul style="padding-left:20px;line-height:1.85;">
