@@ -10649,7 +10649,6 @@ function openCompletedDetail(id) {
   const contactFull = formatContactFull(c.contactType, c.contact);
   const snap = c.receiptSnapshot || {};
   
-  // ★ 提取默认权限（取第一个稿件的权限作为展示）
   const defaultLicense = snap.groups && snap.groups[0] && snap.groups[0].items && snap.groups[0].items[0] ? snap.groups[0].items[0].license : (snap.license || '');
   const perms = getPermissions();
 
@@ -10676,7 +10675,7 @@ function openCompletedDetail(id) {
               <span class="v">${escapeHtml(c.completedDate || '—')}</span>
             </div>
 
-            <!-- ★ 新增：可修改的权限 -->
+            <!-- ★ 权限下拉框 -->
             <div class="completed-detail-row">
               <span class="k">权限</span>
               <span class="v">
@@ -10757,8 +10756,6 @@ function saveCompletedDetailExtra(id) {
   if (idx < 0) return;
 
   const c = list[idx];
-  
-  // 如果没有快照，初始化一个空对象
   if (!c.receiptSnapshot || typeof c.receiptSnapshot !== 'object') {
     c.receiptSnapshot = {};
   }
@@ -10772,25 +10769,19 @@ function saveCompletedDetailExtra(id) {
   c.receiptSnapshot.attribute = newAttr;
   c.receiptSnapshot.character = newChar;
   
-  // ★ 核心：将权限更新到快照里的每一个稿件
   if (c.receiptSnapshot.groups && Array.isArray(c.receiptSnapshot.groups)) {
     c.receiptSnapshot.groups.forEach(g => {
       if (g.items && Array.isArray(g.items)) {
-        g.items.forEach(it => {
-          it.license = newLicense;
-        });
+        g.items.forEach(it => { it.license = newLicense; });
       }
     });
   } else {
-    // 兼容没有任何稿件组的异常数据
     c.receiptSnapshot.license = newLicense;
   }
 
   if (setCompleted(list)) {
     showToast('✅ 补充信息已保存', 2000);
     closeModal();
-    
-    // 触发云端同步
     window.__hasUnsavedChanges = true;
     if (typeof setPendingFlag === 'function') setPendingFlag(true);
     if (typeof commitSyncNow === 'function') commitSyncNow();
@@ -13878,7 +13869,6 @@ function openTicketFilterModal() {
            '" onclick="setTicketFilterRange(\'' + k + '\')">' + label + '</button>';
   }).join('');
 
-  /* ★ 新增：权限列表 */
   const perms = getPermissions();
   const usedLicenses = collectHistoryLicenses();
   const licenseListHtml = usedLicenses.length
@@ -13892,7 +13882,6 @@ function openTicketFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史权限</span>';
 
-  /* ★ 新增：角色列表 */
   const charList = collectHistoryFieldValues('character');
   const charListHtml = charList.length
     ? charList.map(v => {
@@ -13956,7 +13945,6 @@ function openTicketFilterModal() {
             <input type="text" id="ticketClientFilter" value="${escapeAttr(cur.clientId || '')}" placeholder="输入单主 ID 关键字（可留空）" maxlength="60" />
           </div>
 
-          <!-- ★ 权限筛选 -->
           <div class="ofm-section">
             <label class="ofm-section-label">权限（单选）</label>
             <div class="ofm-tag-list" id="ticketLicenseFilterList">${licenseListHtml}</div>
@@ -13977,7 +13965,6 @@ function openTicketFilterModal() {
             <div class="ofm-tag-list" id="ticketAttrFilterList">${attrListHtml}</div>
           </div>
 
-          <!-- ★ 角色筛选 -->
           <div class="ofm-section">
             <label class="ofm-section-label">角色（单选）</label>
             <div class="ofm-tag-list" id="ticketCharFilterList">${charListHtml}</div>
@@ -19132,14 +19119,12 @@ function renderOrderFilterModal() {
   const state = __orderFilter;
   const lib = getTagLibrary();
 
-  /* 时间范围按钮 */
   const rangeBtns = ['all', 'month', 'year', 'custom'].map(k => {
     const label = { all: '全部', month: '本月', year: '本年', custom: '自定义' }[k];
     return '<button type="button" class="ofm-range-btn' + (state.range === k ? ' active' : '') +
            '" onclick="setOrderFilterRange(\'' + k + '\')">' + label + '</button>';
   }).join('');
 
-  /* 权限列表 */
   const perms = getPermissions();
   const usedLicenses = collectHistoryLicenses();
   const licenseListHtml = usedLicenses.length
@@ -19153,7 +19138,6 @@ function renderOrderFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史权限</span>';
 
-  /* 角色列表 */
   const charList = collectHistoryFieldValues('character');
   const charListHtml = charList.length
     ? charList.map(v => {
@@ -19164,7 +19148,6 @@ function renderOrderFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史角色</span>';
 
-  /* 标签列表 */
   const tagListHtml = lib.length
     ? lib.map(t => {
         const sel = state.tags.indexOf(t.name) > -1;
@@ -19175,7 +19158,6 @@ function renderOrderFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史标签，先在小票页添加</span>';
 
-  /* IP 列表 */
   const ipList = collectHistoryFieldValues('ip');
   const ipListHtml = ipList.length
     ? ipList.map(v => {
@@ -19186,7 +19168,6 @@ function renderOrderFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史 IP</span>';
 
-  /* 属性列表 */
   const attrList = collectHistoryFieldValues('attribute');
   const attrListHtml = attrList.length
     ? attrList.map(v => {
@@ -19197,7 +19178,6 @@ function renderOrderFilterModal() {
       }).join('')
     : '<span class="ofm-empty">还没有历史属性</span>';
 
-  /* 状态按钮 */
   const statusBtns = ORDER_FILTER_STATUSES.map(s => {
     const sel = state.statuses.indexOf(s.key) > -1;
     return '<button type="button" class="ofm-status-btn' + (sel ? ' active' : '') +
@@ -19222,7 +19202,6 @@ function renderOrderFilterModal() {
             </div>
           </div>
 
-          <!-- ★ 权限筛选 -->
           <div class="ofm-section">
             <label class="ofm-section-label">权限（单选）</label>
             <div class="ofm-tag-list">${licenseListHtml}</div>
@@ -19243,7 +19222,6 @@ function renderOrderFilterModal() {
             <div class="ofm-tag-list">${attrListHtml}</div>
           </div>
 
-          <!-- ★ 角色筛选 -->
           <div class="ofm-section">
             <label class="ofm-section-label">角色（单选）</label>
             <div class="ofm-tag-list">${charListHtml}</div>
