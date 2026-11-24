@@ -6079,24 +6079,25 @@ function generate() {
   $('outFinal').textContent = fmt(finalPay);
 
   /* 13. 赠品 */
-  const outGifts = $('outGifts');
-  outGifts.innerHTML = '';
-  let hasGift = false;
-  if (!placeholderOn) {
-    const giftNames = document.querySelectorAll('.gift-name');
-    const giftVals  = document.querySelectorAll('.gift-val');
-    giftNames.forEach((inp, i) => {
-      const name = inp.value.trim();
-      const val  = giftVals[i].value;
-      if (!name) return;
-      hasGift = true;
-      const row = document.createElement('div');
-      row.className = 'info-row';
-      row.innerHTML = `<span>${escapeHtml(name)}</span><span>${val ? fmt(Number(val) || 0) : "—"}</span>`;
-      outGifts.appendChild(row);
-    });
-  }
-  if ($('outGiftsBox')) $('outGiftsBox').style.display = hasGift ? 'block' : 'none';
+      const outGifts = $('outGifts');
+    outGifts.innerHTML = '';
+    let hasGift = false;
+    if (!placeholderOn) {
+      const giftNames = document.querySelectorAll('.gift-name');
+      const giftVals  = document.querySelectorAll('.gift-val');
+      giftNames.forEach((inp, i) => {
+        const name = inp.value.trim();
+        const val  = giftVals[i].value;
+        if (!name) return;
+        hasGift = true;
+        const row = document.createElement('div');
+        // 使用小票里统一的 └ 前缀，左侧留点缩进，右侧金额，字体颜色统一用辅色
+        row.style.cssText = 'display:flex; justify-content:space-between; padding: 2px 0; color: var(--rc-ink-soft); font-size: 0.95em;';
+        row.innerHTML = `<span>└ ${escapeHtml(name)}</span><span>${val ? fmt(Number(val) || 0) : "—"}</span>`;
+        outGifts.appendChild(row);
+      });
+    }
+    if ($('outGiftsBox')) $('outGiftsBox').style.display = hasGift ? 'block' : 'none';
 
   /* 14. 应用小票外观设置 */
   applyReceiptSettings();
